@@ -8,6 +8,15 @@ function producerGroup(order, producerId) {
   return (order.groups || {})[producerId] || { status: 'nuevo', subtotal: 0 };
 }
 
+function producerCanOperate() {
+  return Boolean(db.user && db.user.emailVerified);
+}
+
+function panelVerifyBanner() {
+  if (producerCanOperate()) return '';
+  return `<div class="verify-banner" role="alert">${icon('info')}<div><strong>Verificá tu correo para operar tu tienda</strong><span>Confirmá ${esc(db.user.email)} para publicar, editar productos o cambiar tu perfil. Podés revisar pedidos mientras tanto.</span></div><button class="btn btn-sm btn-white" type="button" data-action="resend-verification">Reenviar enlace</button></div>`;
+}
+
 function viewPanel() {
   if (db.role !== 'producer' || !db.producerId) return panelGate();
   const producer = ownProducer();
@@ -42,6 +51,7 @@ function viewPanel() {
         <div class="panel-next"><span>Aprendizaje</span><strong>${done} de ${total} clases</strong><small>${done ? 'Seguí con la próxima cápsula' : 'Empezá por oratoria o storytelling'}</small></div>
       </div>
     </section>
+    ${panelVerifyBanner()}
 
     <div class="stat-grid">
       <div class="stat-card"><span>Pedidos nuevos</span><strong>${pending}</strong><small>esperando confirmación</small></div>
@@ -92,6 +102,7 @@ function viewPanelProducts() {
   const list = q ? all.filter((p) => [p.name, p.category, p.lot, p.short].join(' ').toLowerCase().includes(q)) : all;
   return `<div class="wrap page panel-page">
     <div class="page-head"><div class="page-head-row"><div><h1>Productos y stock.</h1><p>Lo que publicás acá aparece en el mercado y en tu perfil. El stock se descuenta automáticamente cuando se confirma un pedido.</p></div><div class="aside"><strong>${all.filter((p) => p.active).length}</strong>activos</div></div></div>
+    ${panelVerifyBanner()}
     <div class="panel-card">
       <div class="panel-toolbar">
         <form class="search-field" data-form="panel-product-search" role="search">
@@ -109,11 +120,11 @@ function viewPanelProducts() {
         <div class="panel-price">${money(p.price)}<small>${p.stock} disponibles</small></div>
         <div class="panel-row-actions">
           <form class="stock-form" data-form="panel-stock" data-id="${p.id}">
-            <input type="number" name="stock" min="0" max="1000000" value="${p.stock}" aria-label="Stock de ${esc(p.name)}">
-            <button class="btn btn-sm btn-ghost" type="submit" aria-label="Guardar stock">${icon('check', 'icon-sm')}</button>
+            <input type="number" name="stock" min="0" max="1000000" value="${p.stock}" aria-label="Stock de ${esc(p.name)}" ${producerCanOperate() ? '' : 'disabled'}>
+            <button class="btn btn-sm btn-ghost" type="submit" aria-label="Guardar stock" ${producerCanOperate() ? '' : 'disabled'}>${icon('check', 'icon-sm')}</button>
           </form>
-          <a class="btn btn-sm btn-ghost" href="#/panel/product/${p.id}" aria-label="Editar ${esc(p.name)}">${icon('edit', 'icon-sm')}</a>
-          <button class="btn btn-sm ${p.active ? 'btn-ghost' : 'btn-primary'}" type="button" data-action="panel-product-toggle" data-id="${p.id}" aria-label="${p.active ? 'Pausar' : 'Publicar'} ${esc(p.name)}">${icon(p.active ? 'pause' : 'play', 'icon-sm')}</button>
+          <a class="btn btn-sm btn-ghost ${producerCanOperate() ? '' : 'is-disabled'}" href="#/panel/product/${p.id}" aria-label="Editar ${esc(p.name)}" ${producerCanOperate() ? '' : 'aria-disabled="true" tabindex="-1"'}>${icon('edit', 'icon-sm')}</a>
+          <button class="btn btn-sm ${p.active ? 'btn-ghost' : 'btn-primary'}" type="button" data-action="panel-product-toggle" data-id="${p.id}" aria-label="${p.active ? 'Pausar' : 'Publicar'} ${esc(p.name)}" ${producerCanOperate() ? '' : 'disabled'}>${icon(p.active ? 'pause' : 'play', 'icon-sm')}</button>
         </div>
       </div>`).join('')}</div>` : `<div class="panel-empty">${icon('market', 'icon-lg')}<p>${q ? 'No hay productos que coincidan con la búsqueda.' : 'Todavía no publicaste productos. Empezá con uno que tengas disponible esta semana.'}</p><a class="btn btn-primary mt-12" href="#/panel/product/new">Publicar el primero</a></div>`}
     </div>
@@ -137,8 +148,9 @@ function viewPanelProduct(id) {
   };
   return `<div class="wrap page panel-page">
     <a class="back-link" href="#/panel/products">${icon('arrow-left', 'icon-sm')} Productos</a>
+    ${panelVerifyBanner()}
     <form class="form-card" data-form="panel-product" data-id="${esc(p.id)}" novalidate>
-      <div class="flex between center gap-12 flex-wrap"><div><h2>${isNew ? 'Publicar producto' : 'Editar producto'}</h2><p>Los campos marcados con * son obligatorios. La foto se muestra en el catálogo y en la ficha.</p></div>${!isNew ? `<button class="btn btn-sm btn-danger" type="button" data-action="panel-product-delete" data-id="${esc(p.id)}">${icon('trash', 'icon-sm')} Pausar</button>` : ''}</div>
+      <div class="flex between center gap-12 flex-wrap"><div><h2>${isNew ? 'Publicar producto' : 'Editar producto'}</h2><p>Los campos marcados con * son obligatorios. La foto se muestra en el catálogo y en la ficha.</p></div>${!isNew ? `<button class="btn btn-sm btn-danger" type="button" data-action="panel-product-delete" data-id="${esc(p.id)}" ${producerCanOperate() ? '' : 'disabled'}>${icon('trash', 'icon-sm')} Pausar</button>` : ''}</div>
       <div class="form-grid">
         <div class="upload-box">
           <img class="upload-preview" id="product-photo-preview" src="${photoSrc(p.photo)}" alt="Vista previa de la foto">
@@ -171,7 +183,7 @@ function viewPanelProduct(id) {
           <div class="field"><label for="pp-available">Disponibilidad</label><select id="pp-available" name="available">${['Esta semana', 'Próxima semana', 'Por temporada', 'A pedido'].map((x) => `<option ${p.available === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
           <div class="field" style="display:grid;gap:9px;align-content:end"><label class="checkbox-line"><input type="checkbox" name="organic" ${p.organic ? 'checked' : ''}> Producción agroecológica u orgánica</label><label class="checkbox-line"><input type="checkbox" name="active" ${p.active ? 'checked' : ''}> Visible en el catálogo</label></div>
         </div>
-        <div class="form-actions"><button class="btn btn-primary" type="submit">${icon('check', 'icon-sm')} ${isNew ? 'Publicar producto' : 'Guardar cambios'}</button><a class="btn btn-ghost" href="#/panel/products">Cancelar</a><span class="spacer"></span><span class="inline-hint">${isNew ? 'El producto aparece en el mercado al guardar.' : 'Los pedidos ya confirmados conservan el precio original.'}</span></div>
+        <div class="form-actions"><button class="btn btn-primary" type="submit" ${producerCanOperate() ? '' : 'disabled'}>${icon('check', 'icon-sm')} ${producerCanOperate() ? (isNew ? 'Publicar producto' : 'Guardar cambios') : 'Verificá tu correo'}</button><a class="btn btn-ghost" href="#/panel/products">Cancelar</a><span class="spacer"></span><span class="inline-hint">${isNew ? 'El producto aparece en el mercado al guardar.' : 'Los pedidos ya confirmados conservan el precio original.'}</span></div>
       </div>
     </form>
   </div>`;
@@ -185,22 +197,24 @@ function viewPanelOrders() {
   const tabs = [['all', 'Todos'], ['nuevo', 'Nuevos'], ['preparando', 'Preparando'], ['en_ruta', 'En ruta'], ['entregado', 'Entregados'], ['cancelado', 'Cancelados']];
   const list = panelOrdersTab === 'all' ? all : all.filter((o) => producerGroup(o, producer.id).status === panelOrdersTab);
   return `<div class="wrap page panel-page">
-    <div class="page-head"><div class="page-head-row"><div><h1>Pedidos recibidos.</h1><p>Confirmá, prepará y marcá la entrega de tu parte. El comprador ve el estado en su cuenta. El pago se coordina por WhatsApp.</p></div><div class="aside"><strong>${all.filter((o) => producerGroup(o, producer.id).status === 'nuevo').length}</strong>nuevos</div></div></div>
+    <div class="page-head"><div class="page-head-row"><div><h1>Pedidos recibidos.</h1><p>Confirmá, prepará y marcá la entrega de tu parte. El comprador ve el estado en su cuenta. Los pagos online se confirman solos; efectivo y transferencia se coordinan por WhatsApp.</p></div><div class="aside"><strong>${all.filter((o) => producerGroup(o, producer.id).status === 'nuevo').length}</strong>nuevos</div></div></div>
+    ${panelVerifyBanner()}
     <div class="chips">${tabs.map(([id, label]) => `<button class="chip ${panelOrdersTab === id ? 'is-active' : ''}" type="button" data-action="panel-orders-tab" data-tab="${id}">${label}</button>`).join('')}</div>
     ${list.length ? `<div class="panel-order-list">${list.map((order) => {
       const group = producerGroup(order, producer.id);
       const items = (order.items || []).filter((it) => it.producerId === producer.id);
       const next = nextStatus(group.status);
+      const invoice = (order.invoices || []).find((inv) => inv.producerId === producer.id);
       return `<article class="panel-order">
         <div class="panel-order-head">
           <div><strong>${esc(order.code)}</strong><span>${esc(order.buyer.name)} · ${esc(order.buyer.city || 'Formosa')} · ${fmtDateTime(order.createdAt)}</span></div>
-          ${statusBadge(group.status)}
+          <div class="flex gap-8 flex-wrap">${statusBadge(group.status)}<span class="status ${paymentStatusClass(order.paymentStatus)}">${esc(paymentStatusLabel(order.paymentStatus))}</span></div>
         </div>
         <div class="panel-order-body">
           <div class="panel-order-items">${items.map((it) => `<div><span>${it.qty} ${esc(it.unit)} · ${esc(it.name)}</span><span>${money(it.price * it.qty)}</span></div>`).join('')}</div>
           <div class="panel-order-meta">
             <span>${icon(order.delivery.mode === 'pickup' ? 'pin' : 'truck', 'icon-sm')} ${esc(orderDeliveryText(order))}</span>
-            <span>${icon('bag', 'icon-sm')} ${esc(paymentLabel(order.payment))}</span>
+            <span>${icon('bag', 'icon-sm')} ${esc(paymentLabel(order.payment))} · ${esc(paymentStatusLabel(order.paymentStatus))}</span>
             <span>${icon('user', 'icon-sm')} ${esc(order.buyer.phone || 'Sin teléfono cargado')}</span>
           </div>
           ${order.note ? `<p class="small muted" style="margin:0"><strong>Nota:</strong> ${esc(order.note)}</p>` : ''}
@@ -208,6 +222,7 @@ function viewPanelOrders() {
             <strong>Subtotal: ${money(group.subtotal)}</strong>
             <div class="status-actions">
               <button class="btn btn-sm btn-ghost" type="button" data-action="panel-order-wa" data-order="${order.id}" ${order.buyer.phone ? '' : 'disabled title="El comprador no cargó un teléfono"'}>${icon('chat', 'icon-sm')} WhatsApp</button>
+              ${invoice ? `<a class="btn btn-sm btn-ghost" href="${invoice.pdfUrl}">${icon('download', 'icon-sm')} ${esc(invoice.number)}</a>` : group.status !== 'cancelado' ? `<button class="btn btn-sm btn-ghost" type="button" data-action="panel-invoice" data-order="${order.id}">${icon('download', 'icon-sm')} Comprobante interno</button>` : ''}
               ${next !== group.status ? `<button class="btn btn-sm btn-primary" type="button" data-action="panel-status" data-order="${order.id}" data-status="${next}">${icon('arrow-right', 'icon-sm')} ${next === 'preparando' ? 'Empezar preparación' : next === 'en_ruta' ? 'Marcar en ruta' : 'Marcar entregado'}</button>` : ''}
               ${group.status !== 'entregado' && group.status !== 'cancelado' ? `<button class="btn btn-sm btn-danger" type="button" data-action="panel-status" data-order="${order.id}" data-status="cancelado">Cancelar</button>` : ''}
             </div>
@@ -224,6 +239,7 @@ function viewPanelProfile() {
   if (!p) return panelGate();
   return `<div class="wrap page panel-page">
     <a class="back-link" href="#/panel">${icon('arrow-left', 'icon-sm')} Panel</a>
+    ${panelVerifyBanner()}
     <form class="form-card" data-form="producer-profile" novalidate>
       <div class="flex between center gap-12 flex-wrap"><div><h2>Perfil público</h2><p>Así te ven los compradores. El sello de origen usa tus iniciales, tu localidad y tu color.</p></div><a class="btn btn-sm btn-ghost" href="#/producer/${p.id}">Ver perfil ${icon('arrow-right', 'icon-sm')}</a></div>
       <div class="form-grid">
@@ -255,10 +271,14 @@ function viewPanelProfile() {
           <div class="field"><label for="pf-whatsapp">WhatsApp para pedidos</label><input id="pf-whatsapp" name="whatsapp" type="tel" inputmode="tel" value="${esc(p.whatsapp || '')}" placeholder="5493704000000"><span class="field-error" data-err="whatsapp" hidden></span><span class="inline-hint">Solo números, con código de país. Sin +, espacios ni guiones. Ej.: 5493704000000.</span></div>
           <div class="field"><label for="pf-alias">Alias o CBU <span class="hint">(opcional)</span></label><input id="pf-alias" name="alias" value="${esc(p.alias || '')}" placeholder="Se comparte solo cuando el comprador pregunta por el pago."><span class="field-error" data-err="alias" hidden></span></div>
         </div>
+        <div class="form-grid-2">
+          <div class="field"><label for="pf-tax">CUIT/CUIL del emprendimiento <span class="hint">(opcional)</span></label><input id="pf-tax" name="taxId" inputmode="numeric" value="${esc(p.taxId || '')}" placeholder="20 12345678 9"><span class="field-error" data-err="taxId" hidden></span><span class="inline-hint">Se imprime en los comprobantes internos. No convierte el documento en factura fiscal.</span></div>
+          <div class="field"><label for="pf-invoice">Nombre para el comprobante <span class="hint">(opcional)</span></label><input id="pf-invoice" name="invoiceName" value="${esc(p.invoiceName || '')}" placeholder="Razón social o nombre de fantasía"><span class="field-error" data-err="invoiceName" hidden></span></div>
+        </div>
         <div class="field"><label for="pf-pickup">Punto de retiro habitual</label><input id="pf-pickup" name="pickup" value="${esc(p.pickup || '')}" placeholder="Ej.: Delegación de Herradura"><span class="field-error" data-err="pickup" hidden></span></div>
         <div class="field"><label for="pf-practices">Prácticas <span class="hint">(separadas por comas)</span></label><input id="pf-practices" name="practices" value="${esc((p.practices || []).join(', '))}" placeholder="Agroecológico, cosecha manual, sin conservantes"><span class="field-error" data-err="practices" hidden></span></div>
         <div class="field"><label for="pf-story">Historia *</label><textarea id="pf-story" name="story" placeholder="Contá el origen, el trabajo de la semana y lo que hace distinta a tu producción. Separá los párrafos con una línea en blanco.">${esc(p.story || '')}</textarea><span class="field-error" data-err="story" hidden></span></div>
-        <div class="form-actions"><button class="btn btn-primary" type="submit">${icon('check', 'icon-sm')} Guardar perfil</button><a class="btn btn-ghost" href="#/panel">Cancelar</a><span class="spacer"></span><span class="session-note">${icon('shield', 'icon-sm')} Tu WhatsApp solo se muestra a compradores con sesión.</span></div>
+        <div class="form-actions"><button class="btn btn-primary" type="submit" ${producerCanOperate() ? '' : 'disabled'}>${icon('check', 'icon-sm')} ${producerCanOperate() ? 'Guardar perfil' : 'Verificá tu correo'}</button><a class="btn btn-ghost" href="#/panel">Cancelar</a><span class="spacer"></span><span class="session-note">${icon('shield', 'icon-sm')} Tu WhatsApp solo se muestra a compradores con sesión.</span></div>
       </div>
     </form>
     <div class="panel-card">

@@ -5,14 +5,22 @@ const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 const multer = require('multer');
+const config = require('./config');
 
 const { init, transaction, nextWeekday, isoDate } = require('./db');
 const { getDb } = require('./state');
 const { hashPassword, verifyPassword } = require('./passwords');
 const {
   createSession, setSessionCookie, currentUser, requireUser, requireProducer,
-  destroySession, publicUser
+  requireAdmin, requireVerified, destroySession, publicUser
 } = require('./auth');
+const mailer = require('./mailer');
+const push = require('./push');
+const tokens = require('./tokens');
+const payments = require('./payments');
+const invoices = require('./invoices');
+const notify = require('./notify');
+const { audit, recentAudit } = require('./audit');
 
 const ROOT = path.resolve(__dirname, '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -36,6 +44,7 @@ const STATUS_FLOW = {
 
 fs.mkdirSync(UPLOADS, { recursive: true });
 init();
+push.init();
 
 const app = express();
 app.disable('x-powered-by');
@@ -78,6 +87,8 @@ function producerOut(row) {
     alias: row.alias,
     pickup: row.pickup,
     role: row.role,
+    taxId: row.tax_id || '',
+    invoiceName: row.invoice_name || '',
     demo: !!row.demo
   };
 }
@@ -109,12 +120,17 @@ function productOut(row) {
   };
 }
 
-function orderOut(row, items, groups) {
+function orderOut(row, items, groups, invoiceList = []) {
   return {
     id: row.id,
     code: row.code,
     createdAt: row.created_at,
-    buyer: { name: row.buyer_name, phone: row.buyer_phone, city: row.buyer_city },
+    buyer: {
+      name: row.buyer_name,
+      phone: row.buyer_phone,
+      city: row.buyer_city,
+      taxId: row.buyer_tax_id || ''
+    },
     delivery: {
       mode: row.delivery_mode,
       pointId: row.pickup_id,
@@ -125,6 +141,10 @@ function orderOut(row, items, groups) {
     },
     payment: row.payment,
     paymentStatus: row.payment_status,
+    paymentDetail: row.payment_detail || '',
+    paymentUrl: row.payment_url || '',
+    paidAt: row.paid_at || null,
+    paymentUpdatedAt: row.payment_updated_at || null,
     note: row.note,
     items: items.map((it) => ({
       productId: it.product_id,
@@ -135,6 +155,7 @@ function orderOut(row, items, groups) {
       qty: it.qty
     })),
     groups,
+    invoices: invoiceList,
     subtotal: row.subtotal,
     shipping: row.shipping,
     total: row.total,
@@ -154,7 +175,8 @@ function loadOrder(id, onlyProducerId = null) {
     : db.prepare('SELECT * FROM order_groups WHERE order_id = ?').all(id);
   const groups = {};
   groupRows.forEach((g) => { groups[g.producer_id] = { status: g.status, subtotal: g.subtotal }; });
-  return orderOut(row, items, groups);
+  const invoiceList = invoices.invoicesForOrder(id, onlyProducerId);
+  return orderOut(row, items, groups, invoiceList);
 }
 
 function ordersFor(user) {
@@ -174,6 +196,10 @@ function ordersFor(user) {
 
 function validationError(fields) {
   return new HttpError(422, 'Revisá los datos marcados.', fields);
+}
+
+function asyncWrap(handler) {
+  return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 }
 
 function cleanText(value, max = 200) {
@@ -265,6 +291,21 @@ function authLimiter(req, res, next) {
   next();
 }
 
+const mailAttempts = new Map();
+function mailLimiter(req, res, next) {
+  const email = String((req.body || {}).email || '').trim().toLowerCase();
+  const key = `${req.ip || 'local'}|${email}`;
+  const now = Date.now();
+  const entry = mailAttempts.get(key) || { count: 0, reset: now + 60 * 60 * 1000 };
+  if (now > entry.reset) { entry.count = 0; entry.reset = now + 60 * 60 * 1000; }
+  if (entry.count >= 6) {
+    return res.status(429).json({ error: 'Pediste demasiados correos. Esperá una hora antes de volver a intentar.' });
+  }
+  entry.count += 1;
+  mailAttempts.set(key, entry);
+  next();
+}
+
 /* ---------- public API ---------- */
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, service: 'innovaagro-app', time: new Date().toISOString() });
@@ -273,13 +314,30 @@ app.get('/api/health', (req, res) => {
 app.get('/api/bootstrap', (req, res) => {
   const db = getDb();
   const user = currentUser(req, res);
+  const pushStatus = push.status();
+  const features = {
+    payments: {
+      enabled: payments.enabled(),
+      provider: 'mercadopago'
+    },
+    push: {
+      enabled: pushStatus.enabled,
+      publicKey: pushStatus.publicKey,
+      subscribed: user ? push.isSubscribed(user.id) : false
+    },
+    invoices: {
+      fiscal: config.invoices.fiscal,
+      note: config.invoices.note
+    }
+  };
   const base = {
     user: publicUser(user),
     config: {
       categories: catalog.categories,
       cities: catalog.cities,
       routes: catalog.routes,
-      pickups: catalog.pickups
+      pickups: catalog.pickups,
+      features
     },
     serverTime: new Date().toISOString()
   };
@@ -305,7 +363,7 @@ app.get('/api/bootstrap', (req, res) => {
 });
 
 /* ---------- auth ---------- */
-app.post('/api/auth/register', authLimiter, (req, res) => {
+app.post('/api/auth/register', authLimiter, asyncWrap(async (req, res) => {
   const db = getDb();
   const body = req.body || {};
   const fields = {};
@@ -354,8 +412,10 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
       );
     }
     db.prepare(`
-      INSERT INTO users (id, email, password_hash, name, phone, city, address, role, producer_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, '', ?, '', ?, ?, ?, ?)
+      INSERT INTO users
+      (id, email, password_hash, name, phone, city, address, tax_id, role, producer_id,
+       email_verified, email_verified_at, suspended, is_admin, last_login_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, '', ?, '', '', ?, ?, 0, NULL, 0, 0, NULL, ?, ?)
     `).run(userId, email, hashPassword(password), name, city, role, producerId, stamp, stamp);
     db.prepare('INSERT INTO settings (user_id, notify_routes, notify_offers) VALUES (?, 1, 0)').run(userId);
     db.prepare('INSERT INTO pitches (user_id, updated_at) VALUES (?, ?)').run(userId, stamp);
@@ -364,8 +424,19 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
   const session = createSession(userId);
   setSessionCookie(res, session);
-  res.status(201).json({ user: publicUser(user) });
-});
+  let verificationSent = false;
+  let verificationDelivery = 'none';
+  try {
+    const verification = tokens.createToken(userId, 'verify', 24 * 60 * 60 * 1000);
+    const result = await mailer.sendVerificationEmail(user, verification.token);
+    verificationSent = result.delivered;
+    verificationDelivery = result.mode || 'none';
+  } catch (error) {
+    console.error('No se pudo enviar la verificación de correo:', error.message);
+  }
+  audit(req, 'auth.register', 'user', userId, { role, verificationSent, verificationDelivery });
+  res.status(201).json({ user: publicUser(user), verificationSent, verificationDelivery });
+}));
 
 app.post('/api/auth/login', authLimiter, (req, res) => {
   const db = getDb();
@@ -375,9 +446,88 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
   if (!user || !verifyPassword(password, user.password_hash)) {
     return res.status(401).json({ error: 'Correo o contraseña incorrectos.' });
   }
+  if (user.suspended) {
+    return res.status(403).json({ error: 'Esta cuenta está suspendida. Escribinos para revisar el caso.' });
+  }
+  const stamp = new Date().toISOString();
+  db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(stamp, user.id);
   const session = createSession(user.id);
   setSessionCookie(res, session);
+  audit({ ...req, user: { ...user, last_login_at: stamp } }, 'auth.login', 'user', user.id);
   res.json({ user: publicUser(user) });
+});
+
+app.post('/api/auth/verify-email', authLimiter, (req, res) => {
+  const db = getDb();
+  const token = cleanText((req.body || {}).token, 200);
+  const row = tokens.consumeToken(token, 'verify');
+  if (!row) return res.status(400).json({ error: 'El enlace no es válido o ya venció. Pedí uno nuevo desde tu perfil.' });
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(row.user_id);
+  if (!user) return res.status(400).json({ error: 'La cuenta asociada ya no existe.' });
+  if (!user.email_verified) {
+    const stamp = new Date().toISOString();
+    db.prepare('UPDATE users SET email_verified = 1, email_verified_at = ?, updated_at = ? WHERE id = ?')
+      .run(stamp, stamp, user.id);
+  }
+  audit({ ...req, user }, 'auth.email_verified', 'user', user.id);
+  res.json({ ok: true, email: user.email });
+});
+
+app.post('/api/auth/resend-verification', requireUser, mailLimiter, async (req, res, next) => {
+  try {
+    if (req.user.email_verified) return res.json({ ok: true, alreadyVerified: true });
+    const verification = tokens.createToken(req.user.id, 'verify', 24 * 60 * 60 * 1000);
+    const result = await mailer.sendVerificationEmail(req.user, verification.token);
+    audit(req, 'auth.verification_resent', 'user', req.user.id);
+    res.json({ ok: true, sent: true, delivery: result.mode });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/auth/forgot', mailLimiter, async (req, res) => {
+  const generic = { ok: true, message: 'Si el correo está registrado, te enviamos las instrucciones. Revisá también la carpeta de spam.' };
+  try {
+    const db = getDb();
+    const email = cleanText((req.body || {}).email, 160).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return res.json(generic);
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    if (!user || user.suspended) return res.json(generic);
+    const reset = tokens.createToken(user.id, 'reset', 30 * 60 * 1000);
+    await mailer.sendPasswordResetEmail(user, reset.token);
+    audit({ ...req, user }, 'auth.forgot_password', 'user', user.id);
+  } catch (error) {
+    console.error('Recuperación de contraseña:', error.message);
+  }
+  return res.json(generic);
+});
+
+app.post('/api/auth/reset', authLimiter, (req, res) => {
+  const db = getDb();
+  const token = cleanText((req.body || {}).token, 200);
+  const password = String((req.body || {}).password || '');
+  if (password.length < 8 || password.length > 200) {
+    return res.status(422).json({
+      error: 'La contraseña debe tener entre 8 y 200 caracteres.',
+      fields: { password: 'Usá al menos 8 caracteres.' }
+    });
+  }
+  const row = tokens.consumeToken(token, 'reset');
+  if (!row) return res.status(400).json({ error: 'El enlace no es válido o ya venció. Pedí uno nuevo.' });
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(row.user_id);
+  if (!user || user.suspended) return res.status(400).json({ error: 'No se puede restablecer esta cuenta.' });
+  const stamp = new Date().toISOString();
+  transaction(() => {
+    db.prepare('UPDATE users SET password_hash = ?, email_verified = 1, email_verified_at = COALESCE(email_verified_at, ?), updated_at = ? WHERE id = ?')
+      .run(hashPassword(password), stamp, stamp, user.id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
+    tokens.invalidateTokens(user.id, 'reset');
+  });
+  const session = createSession(user.id);
+  setSessionCookie(res, session);
+  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+  audit({ ...req, user: updated }, 'auth.password_reset', 'user', user.id);
+  res.json({ ok: true, user: publicUser(updated) });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -394,11 +544,13 @@ app.patch('/api/me', requireUser, (req, res) => {
   const phone = cleanText(body.phone, 20);
   const city = catalog.cities.includes(body.city) ? body.city : cleanText(body.city, 80);
   const address = cleanText(body.address, 200);
+  const taxId = cleanText(body.taxId, 20).replace(/[^\d-]/g, '');
   if (name.length < 2) fields.name = 'Ingresá tu nombre.';
   if (phone && !/^[0-9+()\s-]{6,20}$/.test(phone)) fields.phone = 'Revisá el teléfono.';
+  if (taxId && !/^\d{8,11}-?\d?$/.test(taxId)) fields.taxId = 'Ingresá un CUIT/CUIL válido o dejalo vacío.';
   if (Object.keys(fields).length) throw validationError(fields);
-  db.prepare('UPDATE users SET name = ?, phone = ?, city = ?, address = ?, updated_at = ? WHERE id = ?')
-    .run(name, phone, city || 'Formosa Capital', address, new Date().toISOString(), req.user.id);
+  db.prepare('UPDATE users SET name = ?, phone = ?, city = ?, address = ?, tax_id = ?, updated_at = ? WHERE id = ?')
+    .run(name, phone, city || 'Formosa Capital', address, taxId, new Date().toISOString(), req.user.id);
   res.json({ user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id)) });
 });
 
@@ -435,7 +587,7 @@ app.get('/api/me/export', requireUser, (req, res) => {
 });
 
 /* ---------- producer profile ---------- */
-app.patch('/api/producer/me', requireProducer, (req, res) => {
+app.patch('/api/producer/me', requireProducer, requireVerified, (req, res) => {
   const db = getDb();
   const body = req.body || {};
   const fields = {};
@@ -450,6 +602,8 @@ app.patch('/api/producer/me', requireProducer, (req, res) => {
   const whatsapp = cleanText(body.whatsapp, 20).replace(/[^\d+]/g, '');
   const alias = cleanText(body.alias, 60);
   const pickup = cleanText(body.pickup, 100);
+  const taxId = cleanText(body.taxId, 20).replace(/[^\d-]/g, '');
+  const invoiceName = cleanText(body.invoiceName, 100);
   const accent = /^#[0-9a-f]{6}$/i.test(body.accent || '') ? body.accent : '#9b6239';
   const practices = Array.isArray(body.practices)
     ? body.practices.map((p) => cleanText(p, 48)).filter(Boolean).slice(0, 8)
@@ -465,17 +619,19 @@ app.patch('/api/producer/me', requireProducer, (req, res) => {
   if (!Number.isFinite(hectares) || hectares < 0 || hectares > 100000) fields.hectares = 'Revisá la superficie.';
   if (story.length > 5000) fields.story = 'La historia es demasiado larga.';
   if (whatsapp && !/^\d{8,15}$/.test(whatsapp)) fields.whatsapp = 'Usá solo números, con código de país. Ej.: 5493704000000.';
+  if (taxId && !/^\d{8,11}-?\d?$/.test(taxId)) fields.taxId = 'Ingresá un CUIT/CUIL válido o dejalo vacío.';
   if (!/^(\/uploads\/[a-z0-9._-]+|\/assets\/photos\/[a-z0-9_-]+\.webp|[a-z0-9_]+)$/i.test(photo)) fields.photo = 'La imagen no es válida.';
   if (Object.keys(fields).length) throw validationError(fields);
 
   db.prepare(`
     UPDATE producers SET name = ?, owner = ?, place = ?, zone = ?, since = ?, hectares = ?,
-      story = ?, role = ?, whatsapp = ?, alias = ?, pickup = ?, accent = ?, practices = ?, photo = ?, updated_at = ?
+      story = ?, role = ?, whatsapp = ?, alias = ?, pickup = ?, accent = ?, practices = ?, photo = ?,
+      tax_id = ?, invoice_name = ?, updated_at = ?
     WHERE id = ?
   `).run(
     name, owner, place, zone, Math.round(since), hectares, story, role || 'Productor',
     whatsapp.replace(/^\+/, ''), alias, pickup, accent, JSON.stringify(practices), photo,
-    new Date().toISOString(), req.user.producer_id
+    taxId, invoiceName, new Date().toISOString(), req.user.producer_id
   );
   res.json({ producer: producerOut(db.prepare('SELECT * FROM producers WHERE id = ?').get(req.user.producer_id)) });
 });
@@ -517,7 +673,7 @@ function productPayload(body, current = null) {
   };
 }
 
-app.post('/api/products', requireProducer, (req, res) => {
+app.post('/api/products', requireProducer, requireVerified, (req, res) => {
   const db = getDb();
   const data = productPayload(req.body || {});
   const id = uniqueProductId(data.name);
@@ -534,7 +690,7 @@ app.post('/api/products', requireProducer, (req, res) => {
   res.status(201).json({ product: productOut(db.prepare('SELECT * FROM products WHERE id = ?').get(id)) });
 });
 
-app.patch('/api/products/:id', requireProducer, (req, res) => {
+app.patch('/api/products/:id', requireProducer, requireVerified, (req, res) => {
   const db = getDb();
   const current = db.prepare('SELECT * FROM products WHERE id = ? AND producer_id = ?').get(req.params.id, req.user.producer_id);
   if (!current) return res.status(404).json({ error: 'Producto no encontrado.' });
@@ -551,7 +707,7 @@ app.patch('/api/products/:id', requireProducer, (req, res) => {
   res.json({ product: productOut(db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id)) });
 });
 
-app.patch('/api/products/:id/stock', requireProducer, (req, res) => {
+app.patch('/api/products/:id/stock', requireProducer, requireVerified, (req, res) => {
   const db = getDb();
   const stock = Number((req.body || {}).stock);
   if (!Number.isFinite(stock) || stock < 0 || stock > 1000000) throw validationError({ stock: 'Stock inválido.' });
@@ -561,7 +717,7 @@ app.patch('/api/products/:id/stock', requireProducer, (req, res) => {
   res.json({ product: productOut(db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id)) });
 });
 
-app.delete('/api/products/:id', requireProducer, (req, res) => {
+app.delete('/api/products/:id', requireProducer, requireVerified, (req, res) => {
   const db = getDb();
   const result = db.prepare('UPDATE products SET active = 0, updated_at = ? WHERE id = ? AND producer_id = ?')
     .run(new Date().toISOString(), req.params.id, req.user.producer_id);
@@ -624,7 +780,7 @@ app.patch('/api/settings', requireUser, (req, res) => {
 });
 
 /* ---------- orders ---------- */
-app.post('/api/orders', requireUser, (req, res) => {
+app.post('/api/orders', requireUser, requireVerified, (req, res) => {
   const db = getDb();
   const body = req.body || {};
   const fields = {};
@@ -647,12 +803,15 @@ app.post('/api/orders', requireUser, (req, res) => {
   const pickup = catalog.pickups.find((p) => p.id === body.pointId);
   const route = catalog.routes.find((r) => r.id === body.routeId) || (pickup ? catalog.routes.find((r) => r.id === pickup.routeId) : null);
   const address = cleanText(body.address, 200);
+  const buyerTaxId = cleanText(body.taxId, 20).replace(/[^\d-]/g, '');
 
   if (name.length < 2) fields.name = 'Ingresá el nombre de quien recibe.';
   if (!/^[0-9+()\s-]{6,20}$/.test(phone)) fields.phone = 'Ingresá un WhatsApp válido.';
+  if (buyerTaxId && !/^\d{8,11}-?\d?$/.test(buyerTaxId)) fields.taxId = 'Ingresá un CUIT/CUIL válido o dejalo vacío.';
   if (mode === 'pickup' && !pickup) fields.pointId = 'Elegí un punto de retiro.';
   if (mode === 'delivery' && !route) fields.routeId = 'Elegí una ruta de entrega.';
   if (mode === 'delivery' && address.length < 5) fields.address = 'Ingresá la dirección de entrega.';
+  if (payment === 'mercadopago' && !payments.enabled()) fields.payment = 'El pago online no está disponible en este servidor. Elegí efectivo o transferencia.';
   if (Object.keys(fields).length) throw validationError(fields);
 
   const items = [];
@@ -686,10 +845,11 @@ app.post('/api/orders', requireUser, (req, res) => {
   transaction(() => {
     db.prepare(`
       INSERT INTO orders
-      (id, code, user_id, buyer_name, buyer_phone, buyer_city, delivery_mode, pickup_id, route_id, address, delivery_date, delivery_window, payment, payment_status, note, subtotal, shipping, total, demo, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, 0, ?)
+      (id, code, user_id, buyer_name, buyer_phone, buyer_city, buyer_tax_id, delivery_mode, pickup_id, route_id, address,
+       delivery_date, delivery_window, payment, payment_status, note, subtotal, shipping, total, demo, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, 0, ?)
     `).run(
-      id, code, req.user.id, name, phone, city, mode, pickup ? pickup.id : '', route.id,
+      id, code, req.user.id, name, phone, city, buyerTaxId, mode, pickup ? pickup.id : '', route.id,
       address, date, window, payment, note, subtotal, shipping, total, createdAt
     );
     const insertItem = db.prepare('INSERT INTO order_items (order_id, product_id, producer_id, name, unit, price, qty) VALUES (?, ?, ?, ?, ?, ?, ?)');
@@ -705,18 +865,21 @@ app.post('/api/orders', requireUser, (req, res) => {
     });
     const insertGroup = db.prepare('INSERT INTO order_groups (order_id, producer_id, status, subtotal) VALUES (?, ?, ?, ?)');
     groups.forEach((g, producerId) => insertGroup.run(id, producerId, 'nuevo', g.subtotal));
-    db.prepare('UPDATE users SET name = ?, phone = ?, city = ?, address = ?, updated_at = ? WHERE id = ?')
-      .run(name, phone, city || 'Formosa Capital', mode === 'delivery' ? address : req.user.address, createdAt, req.user.id);
+    db.prepare('UPDATE users SET name = ?, phone = ?, city = ?, address = ?, tax_id = ?, updated_at = ? WHERE id = ?')
+      .run(name, phone, city || 'Formosa Capital', mode === 'delivery' ? address : req.user.address, buyerTaxId || req.user.tax_id || '', createdAt, req.user.id);
   });
 
-  res.status(201).json({ order: loadOrder(id), code });
+  const order = loadOrder(id);
+  audit(req, 'order.created', 'order', id, { code, total, payment });
+  notify.notifyNewOrder(order);
+  res.status(201).json({ order, code });
 });
 
 app.get('/api/orders/:id', requireUser, (req, res) => {
   const db = getDb();
   const row = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Pedido no encontrado.' });
-  if (row.user_id !== req.user.id) {
+  if (row.user_id !== req.user.id && !req.user.is_admin) {
     if (req.user.role !== 'producer' || !req.user.producer_id) return res.status(403).json({ error: 'No tenés acceso a este pedido.' });
     const belongs = db.prepare('SELECT 1 FROM order_groups WHERE order_id = ? AND producer_id = ?').get(row.id, req.user.producer_id);
     if (!belongs) return res.status(403).json({ error: 'No tenés acceso a este pedido.' });
@@ -750,8 +913,330 @@ app.patch('/api/orders/:id/groups/:producerId', requireProducer, (req, res) => {
       }
     }
   });
+  const fullOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  audit(req, 'order.status', 'order', req.params.id, { producerId: req.user.producer_id, status: next });
+  if (fullOrder) notify.notifyOrderStatus(fullOrder, req.user.producer_id, next);
+  if (next === 'entregado') {
+    const result = invoices.issueInvoice(req.params.id, req.user.producer_id, req.user.id);
+    if (result.error && result.status !== 409) console.error('Comprobante automático:', result.error);
+  }
   res.json({ order: loadOrder(req.params.id, req.user.producer_id) });
 });
+
+/* ---------- pagos online ---------- */
+app.post('/api/orders/:id/payment', requireUser, async (req, res, next) => {
+  try {
+    const db = getDb();
+    const row = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Pedido no encontrado.' });
+    if (row.user_id !== req.user.id) return res.status(403).json({ error: 'No podés pagar un pedido de otra cuenta.' });
+    if (row.payment !== 'mercadopago') return res.status(409).json({ error: 'Este pedido se coordina por efectivo o transferencia.' });
+    if (row.payment_status === 'pagado') return res.status(409).json({ error: 'Este pedido ya está pago.' });
+    if (row.payment_status === 'reembolsado') return res.status(409).json({ error: 'Este pedido ya fue reembolsado.' });
+    if (row.payment_status === 'contracargo') return res.status(409).json({ error: 'Este pago está en revisión por un contracargo.' });
+    const order = loadOrder(row.id);
+    const preference = await payments.createPreference(order, req.user);
+    db.prepare('UPDATE orders SET payment_ref = ?, payment_url = ?, payment_updated_at = ? WHERE id = ?')
+      .run(preference.id, preference.initPoint, new Date().toISOString(), row.id);
+    audit(req, 'payment.preference', 'order', row.id, { preferenceId: preference.id, total: row.total });
+    return res.json({
+      initPoint: config.payments.sandbox && preference.sandboxInitPoint ? preference.sandboxInitPoint : preference.initPoint,
+      preferenceId: preference.id
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.post('/api/payments/webhook', async (req, res) => {
+  if (!payments.enabled()) return res.status(503).json({ error: 'Pagos no configurados.' });
+  if (!payments.isPaymentNotification(req)) return res.json({ ok: true, ignored: true });
+  if (!payments.verifySignature(req)) {
+    console.warn('Webhook de Mercado Pago rechazado: firma inválida.');
+    return res.status(401).json({ error: 'Firma inválida.' });
+  }
+  try {
+    const payment = await payments.getPayment(payments.paymentIdFrom(req));
+    const db = getDb();
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(String(payment.external_reference || ''));
+    if (!order) {
+      console.warn('Webhook de pago para un pedido desconocido:', payment.external_reference);
+      return res.json({ ok: true, ignored: true });
+    }
+    const amount = Number(payment.transaction_amount);
+    const currency = String(payment.currency_id || '').toUpperCase();
+    if (!Number.isFinite(amount) || amount !== order.total || currency !== 'ARS') {
+      console.error('Pago con importe o moneda distinta al pedido', order.id, amount, currency);
+      audit(req, 'payment.mismatch', 'order', order.id, { amount, currency, orderTotal: order.total });
+      return res.json({ ok: true, ignored: true });
+    }
+    const status = payments.mapStatus(payment.status);
+    const changed = order.payment_status !== status || order.payment_id !== String(payment.id);
+    const stamp = new Date().toISOString();
+    db.prepare(`
+      UPDATE orders SET payment_status = ?, payment_id = ?, payment_detail = ?, payment_updated_at = ?,
+        paid_at = CASE WHEN ? = 'pagado' THEN COALESCE(paid_at, ?) ELSE paid_at END
+      WHERE id = ?
+    `).run(
+      status,
+      String(payment.id || ''),
+      [payment.payment_method_id, payment.payment_type_id, payment.status_detail].filter(Boolean).join(' · ').slice(0, 300),
+      stamp,
+      status,
+      stamp,
+      order.id
+    );
+    if (changed) {
+      audit(req, 'payment.webhook', 'order', order.id, { status, paymentId: payment.id, statusDetail: payment.status_detail });
+      const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+      notify.notifyPayment(updated, status);
+    }
+    if (status === 'pagado') {
+      const groups = db.prepare('SELECT producer_id FROM order_groups WHERE order_id = ? AND status <> ?').all(order.id, 'cancelado');
+      groups.forEach((group) => {
+        const result = invoices.issueInvoice(order.id, group.producer_id, 'mercadopago');
+        if (result.error && result.status !== 409) console.error('Comprobante automático:', result.error);
+      });
+    }
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('Webhook de pago:', error.message);
+    return res.status(500).json({ error: 'No se pudo procesar la notificación.' });
+  }
+});
+
+app.get('/pago/retorno', (req, res) => {
+  const id = String(req.query.order || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 80);
+  const result = ['success', 'failure', 'pending'].includes(String(req.query.result)) ? String(req.query.result) : 'pending';
+  const target = id ? `/#/order/${id}?payment=${result}` : `/#/orders?payment=${result}`;
+  res.redirect(302, target);
+});
+
+/* ---------- notificaciones push ---------- */
+app.get('/api/push/key', requireUser, (req, res) => {
+  const status = push.status();
+  res.json({ enabled: status.enabled, publicKey: status.publicKey, subscribed: push.isSubscribed(req.user.id) });
+});
+
+app.post('/api/push/subscribe', requireUser, (req, res) => {
+  const result = push.subscribe(req.user.id, (req.body || {}).subscription, req.get('user-agent'));
+  if (result.error) return res.status(422).json({ error: result.error });
+  audit(req, 'push.subscribed', 'user', req.user.id);
+  res.status(201).json({ ok: true, subscribed: true });
+});
+
+app.delete('/api/push/subscribe', requireUser, (req, res) => {
+  const endpoint = String((req.body || {}).endpoint || '');
+  const result = push.unsubscribe(req.user.id, endpoint);
+  audit(req, 'push.unsubscribed', 'user', req.user.id);
+  res.json(result);
+});
+
+app.post('/api/push/test', requireUser, asyncWrap(async (req, res) => {
+  const result = await push.sendToUser(req.user.id, {
+    title: 'Notificaciones activas',
+    body: 'Este es un aviso de prueba de InnovaAgro-App. Vas a recibir novedades de tus pedidos.',
+    url: '/#/profile',
+    tag: 'test'
+  });
+  res.json({ ...result, configured: push.status().enabled });
+}));
+
+/* ---------- comprobantes ---------- */
+function canAccessInvoice(user, invoice) {
+  if (!user || !invoice) return false;
+  if (user.is_admin) return true;
+  if (invoice.buyerUserId === user.id) return true;
+  return user.role === 'producer' && user.producer_id === invoice.producerId;
+}
+
+app.get('/api/invoices/:id.pdf', requireUser, (req, res) => {
+  const invoice = invoices.findInvoice(req.params.id);
+  if (!invoice || !canAccessInvoice(req.user, invoice)) return res.status(404).json({ error: 'Comprobante no encontrado.' });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${invoice.number}.pdf"`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  invoices.invoicePdf(invoice, res);
+});
+
+app.get('/api/invoices/:id', requireUser, (req, res) => {
+  const invoice = invoices.findInvoice(req.params.id);
+  if (!invoice || !canAccessInvoice(req.user, invoice)) return res.status(404).json({ error: 'Comprobante no encontrado.' });
+  res.json({ invoice });
+});
+
+app.post('/api/panel/orders/:id/invoice', requireProducer, requireVerified, (req, res) => {
+  const db = getDb();
+  const order = db.prepare('SELECT id FROM orders WHERE id = ?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Pedido no encontrado.' });
+  const result = invoices.issueInvoice(req.params.id, req.user.producer_id, req.user.id);
+  if (result.error) return res.status(result.status || 400).json({ error: result.error });
+  audit(req, 'invoice.issued', 'invoice', result.invoice.id, { orderId: req.params.id, producerId: req.user.producer_id });
+  res.status(result.existing ? 200 : 201).json(result);
+});
+
+/* ---------- administración ---------- */
+function adminUserOut(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    producerId: row.producer_id || null,
+    emailVerified: !!row.email_verified,
+    suspended: !!row.suspended,
+    isAdmin: !!row.is_admin,
+    createdAt: row.created_at,
+    lastLoginAt: row.last_login_at || null
+  };
+}
+
+app.get('/api/admin/dashboard', requireAdmin, (req, res) => {
+  const db = getDb();
+  const q = cleanText(req.query.q, 80).toLowerCase();
+  const role = ['buyer', 'producer', 'admin'].includes(String(req.query.role)) ? String(req.query.role) : '';
+  const clauses = [];
+  const params = [];
+  if (q) {
+    clauses.push('(LOWER(email) LIKE ? OR LOWER(name) LIKE ?)');
+    params.push(`%${q}%`, `%${q}%`);
+  }
+  if (role === 'admin') clauses.push('is_admin = 1');
+  else if (role) { clauses.push('role = ? AND is_admin = 0'); params.push(role); }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const users = db.prepare(`
+    SELECT * FROM users ${where}
+    ORDER BY is_admin DESC, created_at DESC LIMIT 80
+  `).all(...params).map(adminUserOut);
+  const orderRows = db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT 50').all();
+  const orderList = orderRows.map((row) => {
+    const order = loadOrder(row.id);
+    const buyer = db.prepare('SELECT email FROM users WHERE id = ?').get(row.user_id);
+    return { ...order, buyerEmail: buyer ? buyer.email : '' };
+  });
+  const invoiceRows = db.prepare('SELECT * FROM invoices ORDER BY issued_at DESC LIMIT 50').all();
+  const stats = {
+    users: db.prepare('SELECT COUNT(*) AS n FROM users').get().n,
+    buyers: db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'buyer' AND is_admin = 0").get().n,
+    producers: db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'producer'").get().n,
+    admins: db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1').get().n,
+    verified: db.prepare('SELECT COUNT(*) AS n FROM users WHERE email_verified = 1').get().n,
+    unverified: db.prepare('SELECT COUNT(*) AS n FROM users WHERE email_verified = 0').get().n,
+    suspended: db.prepare('SELECT COUNT(*) AS n FROM users WHERE suspended = 1').get().n,
+    orders: db.prepare('SELECT COUNT(*) AS n FROM orders').get().n,
+    pendingOrders: db.prepare("SELECT COUNT(*) AS n FROM orders WHERE payment_status = 'pendiente'").get().n,
+    paidOrders: db.prepare("SELECT COUNT(*) AS n FROM orders WHERE payment_status = 'pagado'").get().n,
+    revenue: db.prepare("SELECT COALESCE(SUM(total), 0) AS n FROM orders WHERE payment_status = 'pagado'").get().n,
+    invoices: db.prepare('SELECT COUNT(*) AS n FROM invoices').get().n,
+    pushSubscriptions: db.prepare('SELECT COUNT(*) AS n FROM push_subscriptions').get().n,
+    activeProducts: db.prepare('SELECT COUNT(*) AS n FROM products WHERE active = 1').get().n
+  };
+  res.json({
+    stats,
+    users,
+    orders: orderList,
+    invoices: invoiceRows.map((row) => invoices.invoiceOut(row, null)),
+    audit: recentAudit(40),
+    services: {
+      payments: payments.enabled(),
+      push: push.status().enabled,
+      smtp: mailer.usingSmtp,
+      invoicesFiscal: config.invoices.fiscal
+    }
+  });
+});
+
+app.patch('/api/admin/users/:id', requireAdmin, (req, res) => {
+  const db = getDb();
+  const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Cuenta no encontrada.' });
+  const body = req.body || {};
+  if (target.id === req.user.id && (body.suspended === true || body.isAdmin === false)) {
+    return res.status(409).json({ error: 'No podés suspenderte ni quitarte permisos a vos mismo.' });
+  }
+  if (body.isAdmin === false && target.is_admin) {
+    const admins = db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1').get().n;
+    if (admins <= 1) return res.status(409).json({ error: 'Tiene que quedar al menos una cuenta administradora.' });
+  }
+  const updates = [];
+  const params = [];
+  if (typeof body.suspended === 'boolean') {
+    updates.push('suspended = ?');
+    params.push(body.suspended ? 1 : 0);
+  }
+  if (typeof body.emailVerified === 'boolean') {
+    updates.push('email_verified = ?', 'email_verified_at = ?');
+    params.push(body.emailVerified ? 1 : 0, body.emailVerified ? new Date().toISOString() : null);
+  }
+  if (typeof body.isAdmin === 'boolean') {
+    updates.push('is_admin = ?');
+    params.push(body.isAdmin ? 1 : 0);
+    if (body.isAdmin) {
+      updates.push('email_verified = 1', 'email_verified_at = COALESCE(email_verified_at, ?)');
+      params.push(new Date().toISOString());
+    }
+  }
+  if (!updates.length) return res.status(422).json({ error: 'No hay cambios para aplicar.' });
+  updates.push('updated_at = ?');
+  params.push(new Date().toISOString(), target.id);
+  db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  if (body.suspended === true) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(target.id);
+  if (body.isAdmin === false) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(target.id);
+  audit(req, 'admin.user_update', 'user', target.id, {
+    suspended: body.suspended, emailVerified: body.emailVerified, isAdmin: body.isAdmin
+  });
+  res.json({ user: adminUserOut(db.prepare('SELECT * FROM users WHERE id = ?').get(target.id)) });
+});
+
+app.patch('/api/admin/orders/:id/payment', requireAdmin, (req, res) => {
+  const db = getDb();
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Pedido no encontrado.' });
+  const status = String((req.body || {}).status || '');
+  if (!['pendiente', 'pagado', 'rechazado', 'reembolsado', 'contracargo'].includes(status)) {
+    return res.status(422).json({ error: 'Estado de pago inválido.' });
+  }
+  const stamp = new Date().toISOString();
+  db.prepare(`
+    UPDATE orders SET payment_status = ?, payment_detail = ?, payment_updated_at = ?,
+      paid_at = CASE WHEN ? = 'pagado' THEN COALESCE(paid_at, ?) ELSE paid_at END
+    WHERE id = ?
+  `).run(status, 'Ajuste manual de administración', stamp, status, stamp, order.id);
+  const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+  if (status === 'pagado') {
+    db.prepare('SELECT producer_id FROM order_groups WHERE order_id = ? AND status <> ?').all(order.id, 'cancelado')
+      .forEach((group) => invoices.issueInvoice(order.id, group.producer_id, req.user.id));
+  }
+  notify.notifyPayment(updated, status);
+  audit(req, 'admin.payment_update', 'order', order.id, { status });
+  res.json({ order: loadOrder(order.id) });
+});
+
+app.post('/api/admin/orders/:id/invoice', requireAdmin, (req, res) => {
+  const producerId = cleanText((req.body || {}).producerId, 80);
+  if (!producerId) return res.status(422).json({ error: 'Elegí el productor del comprobante.' });
+  const result = invoices.issueInvoice(req.params.id, producerId, req.user.id);
+  if (result.error) return res.status(result.status || 400).json({ error: result.error });
+  audit(req, 'admin.invoice_issued', 'invoice', result.invoice.id, { orderId: req.params.id, producerId });
+  res.status(result.existing ? 200 : 201).json(result);
+});
+
+app.post('/api/admin/push', requireAdmin, asyncWrap(async (req, res) => {
+  const body = req.body || {};
+  const title = cleanText(body.title, 120);
+  const message = cleanText(body.body, 280);
+  if (title.length < 2 || message.length < 2) {
+    return res.status(422).json({ error: 'Completá un título y un mensaje.' });
+  }
+  const result = await push.broadcast({
+    title,
+    body: message,
+    url: cleanText(body.url, 300) || '/#/home',
+    tag: 'broadcast'
+  });
+  audit(req, 'admin.broadcast', 'push', '', { title, ...result });
+  res.json(result);
+}));
 
 /* ---------- uploads ---------- */
 const upload = multer({
@@ -771,7 +1256,7 @@ function imageExtension(buffer) {
   return null;
 }
 
-app.post('/api/uploads', requireProducer, upload.single('image'), (req, res) => {
+app.post('/api/uploads', requireProducer, requireVerified, upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
   const ext = imageExtension(req.file.buffer);
   if (!ext) return res.status(415).json({ error: 'El archivo no es una imagen válida.' });
@@ -789,10 +1274,14 @@ app.use('/uploads', express.static(UPLOADS, {
 }));
 app.use(express.static(PUBLIC, {
   index: false,
-  maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,
+  maxAge: 0,
   setHeaders(res, filePath) {
-    if (filePath.endsWith('.html') || filePath.endsWith('sw.js') || filePath.endsWith('manifest.webmanifest')) {
+    // Los assets no llevan hash en el nombre: el HTML, los scripts y los
+    // estilos deben revalidarse para que una actualización llegue enseguida.
+    if (/\.(?:html|js|css|webmanifest)$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'no-cache');
+    } else if (/\.(?:webp|png|jpe?g|woff2?)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=604800');
     }
   }
 }));
@@ -806,6 +1295,9 @@ app.get('*', (req, res, next) => {
 app.use((req, res) => res.status(404).json({ error: 'Recurso no encontrado.' }));
 app.use((error, req, res, next) => {
   if (res.headersSent) return next(error);
+  if (error instanceof payments.PaymentError) {
+    return res.status(error.status || 502).json({ error: error.message });
+  }
   if (error instanceof HttpError) {
     return res.status(error.status).json({ error: error.message, ...(error.fields ? { fields: error.fields } : {}) });
   }
@@ -825,6 +1317,20 @@ const server = app.listen(PORT, () => {
   if (process.env.SEED_DEMO !== 'false' && process.env.SEED_CATALOG !== 'false') {
     console.log('Cuentas demo: demo@innovaagro.app / demo1234');
     console.log('Productor demo: finca@innovaagro.app / demo1234');
+    console.log('Administración demo: admin@innovaagro.app / demo1234');
+  }
+  console.log(`Pagos online: ${payments.enabled() ? 'Mercado Pago habilitado' : 'deshabilitados (faltan MP_ACCESS_TOKEN, MP_WEBHOOK_SECRET o PUBLIC_URL HTTPS)'}`);
+  console.log(`Correo: ${mailer.usingSmtp ? 'SMTP configurado' : `modo desarrollo, salida en ${config.mail.outbox}`}`);
+  if (process.env.NODE_ENV === 'production') {
+    if (!/^https:\/\//i.test(config.mail.publicUrl)) {
+      console.warn('Aviso: PUBLIC_URL no es HTTPS. Los enlaces de correo y pagos no funcionarán bien en producción.');
+    }
+    if (!mailer.usingSmtp) {
+      console.warn('Aviso: sin SMTP, la verificación y la recuperación de contraseña no envían correos reales.');
+    }
+    if (process.env.SEED_DEMO !== 'false' && process.env.SEED_CATALOG !== 'false') {
+      console.warn('Aviso: las cuentas y los datos demo siguen activos. Usá SEED_CATALOG=false y SEED_DEMO=false en una instalación real.');
+    }
   }
 });
 

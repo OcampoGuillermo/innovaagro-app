@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
 const { hashPassword } = require('./passwords');
 const state = require('./state');
@@ -40,6 +41,8 @@ CREATE TABLE IF NOT EXISTS producers (
   alias TEXT NOT NULL DEFAULT '',
   pickup TEXT NOT NULL DEFAULT '',
   role TEXT NOT NULL DEFAULT 'Productor',
+  tax_id TEXT NOT NULL DEFAULT '',
+  invoice_name TEXT NOT NULL DEFAULT '',
   active INTEGER NOT NULL DEFAULT 1,
   demo INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
@@ -54,8 +57,14 @@ CREATE TABLE IF NOT EXISTS users (
   phone TEXT NOT NULL DEFAULT '',
   city TEXT NOT NULL DEFAULT 'Formosa Capital',
   address TEXT NOT NULL DEFAULT '',
+  tax_id TEXT NOT NULL DEFAULT '',
   role TEXT NOT NULL CHECK (role IN ('buyer', 'producer')),
   producer_id TEXT REFERENCES producers(id) ON DELETE SET NULL,
+  email_verified INTEGER NOT NULL DEFAULT 0,
+  email_verified_at TEXT,
+  suspended INTEGER NOT NULL DEFAULT 0,
+  is_admin INTEGER NOT NULL DEFAULT 0,
+  last_login_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -98,6 +107,7 @@ CREATE TABLE IF NOT EXISTS orders (
   buyer_name TEXT NOT NULL,
   buyer_phone TEXT NOT NULL DEFAULT '',
   buyer_city TEXT NOT NULL DEFAULT '',
+  buyer_tax_id TEXT NOT NULL DEFAULT '',
   delivery_mode TEXT NOT NULL CHECK (delivery_mode IN ('pickup', 'delivery')),
   pickup_id TEXT NOT NULL DEFAULT '',
   route_id TEXT NOT NULL,
@@ -106,6 +116,12 @@ CREATE TABLE IF NOT EXISTS orders (
   delivery_window TEXT NOT NULL DEFAULT '',
   payment TEXT NOT NULL,
   payment_status TEXT NOT NULL DEFAULT 'pendiente',
+  payment_ref TEXT NOT NULL DEFAULT '',
+  payment_url TEXT NOT NULL DEFAULT '',
+  payment_id TEXT NOT NULL DEFAULT '',
+  payment_detail TEXT NOT NULL DEFAULT '',
+  paid_at TEXT,
+  payment_updated_at TEXT,
   note TEXT NOT NULL DEFAULT '',
   subtotal INTEGER NOT NULL,
   shipping INTEGER NOT NULL,
@@ -162,12 +178,75 @@ CREATE TABLE IF NOT EXISTS settings (
   notify_offers INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS email_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('verify', 'reset')),
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  user_agent TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS invoices (
+  id TEXT PRIMARY KEY,
+  number TEXT NOT NULL UNIQUE,
+  order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  producer_id TEXT NOT NULL,
+  buyer_user_id TEXT NOT NULL,
+  buyer_name TEXT NOT NULL,
+  buyer_email TEXT NOT NULL DEFAULT '',
+  buyer_tax_id TEXT NOT NULL DEFAULT '',
+  seller_name TEXT NOT NULL,
+  seller_owner TEXT NOT NULL DEFAULT '',
+  seller_tax_id TEXT NOT NULL DEFAULT '',
+  seller_address TEXT NOT NULL DEFAULT '',
+  seller_phone TEXT NOT NULL DEFAULT '',
+  subtotal INTEGER NOT NULL,
+  shipping INTEGER NOT NULL DEFAULT 0,
+  total INTEGER NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'ARS',
+  items TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'emitida' CHECK (status IN ('emitida', 'anulada')),
+  note TEXT NOT NULL DEFAULT '',
+  fiscal INTEGER NOT NULL DEFAULT 0,
+  issued_by TEXT NOT NULL,
+  issued_at TEXT NOT NULL,
+  UNIQUE(order_id, producer_id)
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT,
+  action TEXT NOT NULL,
+  entity TEXT NOT NULL DEFAULT '',
+  entity_id TEXT NOT NULL DEFAULT '',
+  detail TEXT,
+  ip TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_products_producer ON products(producer_id);
 CREATE INDEX IF NOT EXISTS idx_products_active ON products(active);
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_producer ON order_items(producer_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_tokens_user ON email_tokens(user_id, kind);
+CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_order ON invoices(order_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_producer ON invoices(producer_id, issued_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
 `;
 
 function nowIso() {
@@ -242,12 +321,14 @@ function seedCatalog() {
   return catalog;
 }
 
-function createSeedUser({ id, email, password, name, role, producerId = null, city = 'Formosa Capital' }) {
+function createSeedUser({ id, email, password, name, role, producerId = null, city = 'Formosa Capital', isAdmin = false }) {
   const stamp = nowIso();
   db.prepare(`
-    INSERT OR IGNORE INTO users (id, email, password_hash, name, phone, city, address, role, producer_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, '', ?, '', ?, ?, ?, ?)
-  `).run(id, email, hashPassword(password), name, city, role, producerId, stamp, stamp);
+    INSERT OR IGNORE INTO users
+    (id, email, password_hash, name, phone, city, address, tax_id, role, producer_id,
+     email_verified, email_verified_at, suspended, is_admin, last_login_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, '', ?, '', '', ?, ?, 1, ?, 0, ?, NULL, ?, ?)
+  `).run(id, email, hashPassword(password), name, city, role, producerId, stamp, isAdmin ? 1 : 0, stamp, stamp);
   db.prepare('INSERT OR IGNORE INTO settings (user_id, notify_routes, notify_offers) VALUES (?, 1, 0)').run(id);
   db.prepare('INSERT OR IGNORE INTO pitches (user_id, updated_at) VALUES (?, ?)').run(id, stamp);
 }
@@ -262,6 +343,11 @@ function seedDemo() {
   createSeedUser({
     id: 'u-demo-buyer', email: 'demo@innovaagro.app', password: 'demo1234',
     name: 'Mariana Silva', role: 'buyer'
+  });
+
+  createSeedUser({
+    id: 'u-demo-admin', email: 'admin@innovaagro.app', password: 'demo1234',
+    name: 'Administración InnovaAgro', role: 'buyer', isAdmin: true
   });
 
   const producerEmails = ['finca', 'cooperativa', 'apiario', 'quesos', 'huerta', 'artesanas', 'frutas', 'ribera', 'verde'];
@@ -330,6 +416,80 @@ function ensureDemoColumns() {
   });
 }
 
+function tableColumns(table) {
+  return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((row) => row.name));
+}
+
+function addColumn(table, definition) {
+  const name = String(definition).trim().split(/\s+/)[0];
+  if (tableColumns(table).has(name)) return false;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`);
+  return true;
+}
+
+function migrateSchema() {
+  const emailVerifiedAdded = addColumn('users', 'email_verified INTEGER NOT NULL DEFAULT 0');
+  addColumn('users', 'email_verified_at TEXT');
+  addColumn('users', 'suspended INTEGER NOT NULL DEFAULT 0');
+  addColumn('users', 'is_admin INTEGER NOT NULL DEFAULT 0');
+  addColumn('users', 'tax_id TEXT NOT NULL DEFAULT \'\'');
+  addColumn('users', 'last_login_at TEXT');
+  if (emailVerifiedAdded) {
+    const stamp = nowIso();
+    db.prepare('UPDATE users SET email_verified = 1, email_verified_at = ?').run(stamp);
+    console.log('Migración: cuentas existentes marcadas con correo verificado.');
+  }
+  addColumn('producers', 'tax_id TEXT NOT NULL DEFAULT \'\'');
+  addColumn('producers', 'invoice_name TEXT NOT NULL DEFAULT \'\'');
+  addColumn('orders', 'buyer_tax_id TEXT NOT NULL DEFAULT \'\'');
+  addColumn('orders', 'payment_ref TEXT NOT NULL DEFAULT \'\'');
+  addColumn('orders', 'payment_url TEXT NOT NULL DEFAULT \'\'');
+  addColumn('orders', 'payment_id TEXT NOT NULL DEFAULT \'\'');
+  addColumn('orders', 'payment_detail TEXT NOT NULL DEFAULT \'\'');
+  addColumn('orders', 'paid_at TEXT');
+  addColumn('orders', 'payment_updated_at TEXT');
+}
+
+function seedAdminFromEnv() {
+  const email = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  const password = String(process.env.ADMIN_PASSWORD || '');
+  if (!email && !password) return;
+  if (!email || password.length < 10) {
+    console.warn('ADMIN_EMAIL/ADMIN_PASSWORD incompletos: la cuenta administradora no se creó ni actualizó. La contraseña debe tener 10 caracteres o más.');
+    return;
+  }
+  const existing = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  const stamp = nowIso();
+  if (existing) {
+    if (existing.is_admin) {
+      db.prepare('UPDATE users SET is_admin = 1, email_verified = 1, email_verified_at = COALESCE(email_verified_at, ?), suspended = 0, updated_at = ? WHERE id = ?')
+        .run(stamp, stamp, existing.id);
+    } else {
+      // Si la cuenta ya existía pero no era administradora, la contraseña se
+      // reemplaza por la definida en el entorno. Evita que una cuenta creada
+      // por un tercero con ese correo conserve su clave al ser promovida.
+      db.prepare(`
+        UPDATE users SET is_admin = 1, email_verified = 1, email_verified_at = COALESCE(email_verified_at, ?),
+          suspended = 0, password_hash = ?, updated_at = ?
+        WHERE id = ?
+      `).run(stamp, hashPassword(password), stamp, existing.id);
+      db.prepare('DELETE FROM sessions WHERE user_id = ?').run(existing.id);
+    }
+    console.log(`Administrador habilitado: ${email}`);
+    return;
+  }
+  const id = 'u-admin-' + crypto.randomBytes(6).toString('hex');
+  db.prepare(`
+    INSERT INTO users
+    (id, email, password_hash, name, phone, city, address, tax_id, role, producer_id,
+     email_verified, email_verified_at, suspended, is_admin, last_login_at, created_at, updated_at)
+    VALUES (?, ?, ?, 'Administración', '', 'Formosa Capital', '', '', 'buyer', NULL, 1, ?, 0, 1, NULL, ?, ?)
+  `).run(id, email, hashPassword(password), stamp, stamp, stamp);
+  db.prepare('INSERT OR IGNORE INTO settings (user_id, notify_routes, notify_offers) VALUES (?, 1, 0)').run(id);
+  db.prepare('INSERT OR IGNORE INTO pitches (user_id, updated_at) VALUES (?, ?)').run(id, stamp);
+  console.log(`Administrador creado desde variables de entorno: ${email}`);
+}
+
 function markDemoCatalog() {
   const catalog = readJson('shared/catalog.json');
   const specs = readJson('shared/demo-orders.json');
@@ -352,6 +512,7 @@ function init() {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   db = new DatabaseSync(DB_PATH);
   db.exec(SCHEMA);
+  migrateSchema();
   ensureDemoColumns();
   state.setDb(db);
   const seedCatalogEnabled = process.env.SEED_CATALOG !== 'false';
@@ -367,8 +528,11 @@ function init() {
     transaction(() => seedDemo());
   }
   if (seedCatalogEnabled) transaction(() => markDemoCatalog());
+  seedAdminFromEnv();
   const expired = db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(nowIso());
   if (expired.changes) console.log(`Sesiones vencidas eliminadas: ${expired.changes}`);
+  const tokens = db.prepare('DELETE FROM email_tokens WHERE expires_at < ?').run(nowIso());
+  if (tokens.changes) console.log(`Tokens de correo vencidos eliminados: ${tokens.changes}`);
   return db;
 }
 

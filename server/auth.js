@@ -63,8 +63,11 @@ function publicUser(user) {
     phone: user.phone,
     city: user.city,
     address: user.address,
+    taxId: user.tax_id || '',
     role: user.role,
     producerId: user.producer_id || null,
+    emailVerified: !!user.email_verified,
+    isAdmin: !!user.is_admin,
     createdAt: user.created_at
   };
 }
@@ -86,6 +89,12 @@ function currentUser(req, res) {
     req.user = null;
     return null;
   }
+  if (row.suspended) {
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.id);
+    clearSessionCookie(res);
+    req.user = null;
+    return null;
+  }
   req.user = row;
   return row;
 }
@@ -93,6 +102,25 @@ function currentUser(req, res) {
 function requireUser(req, res, next) {
   const user = currentUser(req, res);
   if (!user) return res.status(401).json({ error: 'Necesitás iniciar sesión.' });
+  return next();
+}
+
+function requireAdmin(req, res, next) {
+  const user = currentUser(req, res);
+  if (!user) return res.status(401).json({ error: 'Necesitás iniciar sesión.' });
+  if (!user.is_admin) return res.status(403).json({ error: 'Esta sección requiere permisos de administración.' });
+  return next();
+}
+
+function requireVerified(req, res, next) {
+  const user = currentUser(req, res);
+  if (!user) return res.status(401).json({ error: 'Necesitás iniciar sesión.' });
+  if (!user.email_verified) {
+    return res.status(403).json({
+      error: 'Verificá tu correo electrónico para completar esta acción.',
+      code: 'email_unverified'
+    });
+  }
   return next();
 }
 
@@ -114,5 +142,5 @@ function destroySession(req, res) {
 
 module.exports = {
   createSession, setSessionCookie, clearSessionCookie, currentUser,
-  requireUser, requireProducer, destroySession, publicUser, parseCookies
+  requireUser, requireProducer, requireAdmin, requireVerified, destroySession, publicUser, parseCookies
 };

@@ -16,8 +16,10 @@ Revisá estos puntos. No son opcionales si la app va a recibir personas reales.
 - [ ] Publicar una política de privacidad con un correo de contacto.
 - [ ] Definir quién administra la base, los respaldos y las cuentas.
 - [ ] No presentar el catálogo inicial como oferta comercial real.
-- [ ] Confirmar que el pago se coordina por WhatsApp y que la app no cobra.
-- [ ] Cambiar o eliminar las cuentas demo antes de abrir al público.
+- [ ] Configurar Mercado Pago real o dejar el cobro online deshabilitado.
+- [ ] Configurar SMTP para verificación y recuperación de contraseña.
+- [ ] Definir la cuenta administradora real y cambiar las claves demo.
+- [ ] Confirmar que los comprobantes internos no se presentan como facturas.
 
 ## 2. Probar en local
 
@@ -46,6 +48,7 @@ La respuesta de salud debe incluir `"ok": true`.
 | --- | --- | --- |
 | Compradora | `demo@innovaagro.app` | `demo1234` |
 | Productor | `finca@innovaagro.app` | `demo1234` |
+| Administración | `admin@innovaagro.app` | `demo1234` |
 
 También existen cuentas para `cooperativa`, `apiario`, `quesos`, `huerta`,
 `artesanas`, `frutas`, `ribera` y `verde`, todas `@innovaagro.app` con la misma
@@ -68,9 +71,16 @@ UPLOADS_DIR=/ruta/persistente/innovaagro/uploads
 - Si ya existe una base, cambiar estas variables no borra nada. Para empezar de
   cero hay que detener el servidor y vaciar `DATA_DIR`.
 
-Con la app vacía, creá una cuenta desde **Crear cuenta → Soy productor**. El
-registro crea el perfil y el panel para cargar el primer producto. Las cuentas
-de comprador se crean desde la pantalla de registro.
+Con la app vacía, definí `ADMIN_EMAIL` y `ADMIN_PASSWORD` (10 caracteres o más)
+en el primer arranque. La cuenta se crea verificada y con acceso al panel de
+administración. Si ya existía como cuenta común, se promueve y se le asigna esa
+contraseña; si ya era administradora, se conserva la clave que tenía. Después creá las cuentas productoras desde **Crear cuenta → Soy
+productor**; el registro crea el perfil y el panel para cargar el primer
+producto. Las cuentas de comprador se crean desde la pantalla de registro.
+
+En una instalación nueva, cada cuenta debe confirmar el correo antes de comprar
+o publicar. Configurá SMTP antes de abrirla al público; si no, revisá
+`DATA_DIR/mail-outbox.jsonl` para obtener los enlaces.
 
 ### Rutas, puntos y cursos
 
@@ -94,12 +104,41 @@ pedidos reales no se guardan en esos JSON: viven en SQLite.
 | `COOKIE_SECURE` | `true` con HTTPS | Cookie de sesión solo por HTTPS. |
 | `TRUST_PROXY` | `true` detrás de proxy | Respeta `X-Forwarded-*`. |
 | `NODE_ENV` | `production` | Activa caché de assets. |
+| `PUBLIC_URL` | `https://mercado.ejemplo.com` | Enlaces de correo y retorno de Mercado Pago. |
+| `ADMIN_EMAIL` | correo real | Crea o habilita la cuenta administradora. |
+| `ADMIN_PASSWORD` | clave larga y única | Contraseña inicial de esa cuenta. |
+| `SMTP_HOST` | servidor SMTP | Activa correos reales de verificación y recuperación. |
+| `SMTP_PORT` | `587` o `465` | Puerto SMTP. `465` usa TLS directo. |
+| `SMTP_USER` / `SMTP_PASS` | credenciales | Autenticación SMTP. |
+| `MAIL_FROM` | remitente válido | Debe estar autorizado por el proveedor. |
+| `MP_ACCESS_TOKEN` | token de producción o prueba | Habilita Checkout Pro. |
+| `MP_WEBHOOK_SECRET` | secreto del webhook | Valida la firma de Mercado Pago. |
+| `MP_SANDBOX` | `true` en pruebas | Usa credenciales de prueba. |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | par VAPID | Push estable entre despliegues. Si faltan, se genera en `DATA_DIR/vapid.json`. |
+| `VAPID_SUBJECT` | `mailto:...` | Contacto exigido por el protocolo push. |
+| `STORE_NAME`, `STORE_LEGAL_NAME`, `STORE_TAX_ID`, `STORE_ADDRESS` | datos reales | Encabezado de comprobantes internos. |
+| `INVOICE_PREFIX` | `IA` | Prefijo de numeración de comprobantes. |
 
 Copiá `.env.example` a `.env` y completá los valores. `npm start` y
 `npm run dev` cargan `.env` si existe. En hosting también podés cargar las
 variables desde el panel del proveedor.
 
-**Nunca subas `.env` al repositorio.**
+**Nunca subas `.env` al repositorio.** Si cambiás las claves VAPID, los
+dispositivos existentes dejan de recibir avisos hasta volver a suscribirse.
+
+### 4.1 Correo, pagos y push
+
+- **Correo:** sin `SMTP_HOST`, la app escribe los enlaces en
+  `DATA_DIR/mail-outbox.jsonl`. Eso sirve para probar, no para producción.
+- **Mercado Pago:** configurá el webhook
+  `https://tu-dominio/api/payments/webhook`. La app exige access token,
+  secreto y `PUBLIC_URL` HTTPS; si falta algo, muestra el pago online
+  deshabilitado y nunca simula una aprobación.
+- **Push:** los navegadores solo permiten suscripciones en HTTPS (o
+  `localhost`). En iPhone hace falta iOS 16.4 o superior y la app agregada a
+  inicio.
+- **Comprobantes:** son internos. No hay integración AFIP/ARCA; el PDF lo dice
+  de forma explícita.
 
 ## 5. Hosting: qué necesitás
 
@@ -256,33 +295,42 @@ Implementado:
 - Contraseñas con `scrypt` y salt.
 - Sesiones con cookie `HttpOnly`, `SameSite=Lax` y expiración.
 - Validación de origen en escrituras.
-- Rate limit de login (20 intentos por IP cada 15 minutos).
+- Rate limit de login (20 intentos por IP cada 15 minutos) y de correos (6 por
+  hora y cuenta).
 - CSP y cabeceras básicas.
 - Validación de stock y precios en el servidor.
 - Pedidos en transacción; el stock se descuenta al confirmar y se repone si el
   productor cancela un pedido real.
-- Exportación de datos de la cuenta.
+- Verificación de correo y recuperación de contraseña con tokens de un solo
+  uso, guardados con hash y con vencimiento.
+- Panel de administración con rol, suspensión de cuentas, sesiones invalidadas y
+  auditoría de acciones sensibles.
+- Checkout Pro de Mercado Pago con validación de firma del webhook y consulta
+  del pago contra la API.
+- Notificaciones push con VAPID y suscripciones por dispositivo.
+- Comprobantes internos en PDF y exportación de datos de la cuenta.
 
-No incluido en esta versión:
+Límites actuales:
 
-- Cobros online, pasarela de pago o split de pagos.
-- Recuperación de contraseña por correo.
-- Verificación de email o teléfono.
-- Panel de administración global.
-- Notificaciones push.
-- Seguimiento logístico en tiempo real.
-- Facturación electrónica.
-- Borrado automático de cuentas inactivas.
+- No hay facturación fiscal AFIP/ARCA; los comprobantes son internos.
+- No hay split automático de pagos entre productores: Mercado Pago cobra al
+  titular de la cuenta configurada y la liquidación entre productores se hace
+  fuera de la app.
+- No hay seguimiento logístico en tiempo real ni integración con transportistas.
+- No hay borrado automático de cuentas inactivas.
+- La entrega real de correo depende de un SMTP externo correctamente
+  autenticado y con dominio verificado.
 
-Para una operación real, definí una política de retención de datos y un canal de
-soporte. El servidor no envía correos: si necesitás recuperación de contraseña,
-hay que agregar un proveedor de email y un flujo con token.
+Para una operación real, definí una política de retención de datos, un canal de
+soporte y un procedimiento para reembolsos y contracargos.
 
 ## 12. Prueba final antes de abrir
 
 - [ ] `/api/health` responde.
 - [ ] HTTPS válido y cookie `Secure` funcionando.
 - [ ] Registro de comprador y de productor.
+- [ ] Llega el correo de verificación y el enlace funciona una sola vez.
+- [ ] Recuperación de contraseña con enlace real y vencimiento.
 - [ ] Login y logout en móvil y escritorio.
 - [ ] Recuperar la app después de cerrar el navegador.
 - [ ] Catálogo con datos reales y stock correcto.
@@ -290,11 +338,16 @@ hay que agregar un proveedor de email y un flujo con token.
 - [ ] Pedido visible en el panel del productor.
 - [ ] Cambio de estado `nuevo → preparando → en_ruta → entregado`.
 - [ ] Cancelación con reposición de stock.
+- [ ] Pago de prueba en Mercado Pago sandbox y webhook recibido.
+- [ ] Pago pendiente y pago rechazado se muestran sin confirmar el pedido.
+- [ ] Comprobante interno descargable por comprador, productor y admin.
 - [ ] WhatsApp abre con el mensaje correcto.
 - [ ] Offline: última copia visible; pedido nuevo bloqueado con aviso.
-- [ ] Instalación PWA y botón atrás de Android.
+- [ ] Instalación PWA, botón atrás de Android y notificación push de prueba.
+- [ ] Panel de administración: buscar cuenta, suspender y auditar el cambio.
 - [ ] Respaldos automáticos y restauración probada.
 - [ ] Cuentas demo desactivadas o contraseñas cambiadas.
+- [ ] `ADMIN_PASSWORD` rotada y guardada en un gestor de secretos.
 
 ## 13. Problemas frecuentes
 

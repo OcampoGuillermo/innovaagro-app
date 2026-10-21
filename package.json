@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env server/index.js",
     "dev": "node --env-file-if-exists=.env --watch server/index.js",
-    "check": "node --check server/index.js && node --check server/db.js && node --check server/auth.js && node --check public/js/app-core.js && node --check public/js/app-views.js && node --check public/js/app-panel.js && node --check public/js/app-init.js"
+    "check": "node --check server/index.js && node --check server/db.js && node --check server/auth.js && node --check server/config.js && node --check server/mailer.js && node --check server/tokens.js && node --check server/push.js && node --check server/payments.js && node --check server/invoices.js && node --check server/audit.js && node --check server/notify.js && node --check public/js/app-core.js && node --check public/js/app-views.js && node --check public/js/app-admin.js && node --check public/js/app-panel.js && node --check public/js/app-init.js && node --check public/sw.js"
   },
   "engines": {
     "node": ">=24"
@@ -25,6 +25,9 @@
   "license": "UNLICENSED",
   "dependencies": {
     "express": "^4.22.3",
-    "multer": "^2.4.0"
+    "multer": "^2.4.0",
+    "nodemailer": "^10.1.7",
+    "pdfkit": "^0.20.2",
+    "web-push": "^3.6.7"
   }
 }

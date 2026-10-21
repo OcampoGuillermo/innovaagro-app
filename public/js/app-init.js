@@ -56,16 +56,19 @@
     authMode = 'login';
     authRole = data.user.role === 'producer' ? 'producer' : 'buyer';
     authError = '';
+    authNotice = '';
     authFields = {};
     checkoutDraft = null;
     checkoutErrors = {};
     panelProductQuery = '';
     ordersTab = 'all';
     panelOrdersTab = 'all';
-    const target = data.user.role === 'producer' ? '#/panel' : '#/home';
+    adminData = null;
+    adminError = '';
+    const target = landingHash(data.user);
     if (location.hash === target) render();
     else go(target);
-    toast(data.user.role === 'producer' ? 'Panel listo. Cargá tu primer producto.' : 'Sesión iniciada. Ya podés armar tu canasta.');
+    toast(data.user.isAdmin ? 'Panel de administración listo.' : data.user.role === 'producer' ? 'Panel listo. Cargá tu primer producto.' : 'Sesión iniciada. Ya podés armar tu canasta.');
   }
 
   function bindEvents() {
@@ -105,6 +108,8 @@
     try {
       if (type === 'login') return await submitLogin(form);
       if (type === 'register') return await submitRegister(form);
+      if (type === 'forgot') return await submitForgot(form);
+      if (type === 'reset') return await submitReset(form);
       if (type === 'hero-search') return submitHeroSearch(form);
       if (type === 'market-search') return submitMarketSearch(form);
       if (type === 'filters') return submitFilters(form);
@@ -116,6 +121,8 @@
       if (type === 'panel-product-search') return submitPanelSearch(form);
       if (type === 'panel-product') return await submitProduct(form);
       if (type === 'producer-profile') return await submitProducerProfile(form);
+      if (type === 'admin-search') return submitAdminSearch(form);
+      if (type === 'admin-push') return await submitAdminPush(form);
     } catch (error) {
       handleError(error, form, type);
     }
@@ -168,16 +175,99 @@
     const button = form.querySelector('[type="submit"]');
     setBusy(button, true, 'Creando cuenta…');
     try {
-      await api('/auth/register', { method: 'POST', body: payload });
+      const response = await api('/auth/register', { method: 'POST', body: payload });
       await completeAuth();
+      toast(response.verificationSent
+        ? `Cuenta creada. Te enviamos el enlace de verificación a ${payload.email}.`
+        : response.verificationDelivery === 'outbox'
+          ? 'Cuenta creada. El correo quedó en la cola local del servidor (sin SMTP configurado).'
+          : 'Cuenta creada. No pudimos enviar el correo ahora; reenviá el enlace desde tu perfil.', !response.verificationSent);
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function submitForgot(form) {
+    const email = String(new FormData(form).get('email') || '').trim();
+    forgotEmail = email;
+    forgotError = '';
+    clearFieldErrors(form);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      forgotError = 'Ingresá un correo válido.';
+      render();
+      return;
+    }
+    const button = form.querySelector('[type="submit"]');
+    setBusy(button, true, 'Enviando…');
+    try {
+      await api('/auth/forgot', { method: 'POST', body: { email } });
+      forgotSent = true;
+      render();
+    } catch (error) {
+      forgotError = error.message || 'No se pudo enviar el enlace.';
+      render();
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function submitReset(form) {
+    const token = form.dataset.token || '';
+    const data = new FormData(form);
+    const password = String(data.get('password') || '');
+    const repeatPassword = String(data.get('repeatPassword') || '');
+    const errors = {};
+    if (password.length < 8) errors.password = 'La contraseña debe tener al menos 8 caracteres.';
+    if (password !== repeatPassword) errors.repeatPassword = 'Las contraseñas no coinciden.';
+    resetError = errors;
+    clearFieldErrors(form);
+    if (Object.keys(errors).length) {
+      showFieldErrors(form, errors);
+      toast(Object.values(errors)[0], true);
+      return;
+    }
+    const button = form.querySelector('[type="submit"]');
+    setBusy(button, true, 'Guardando…');
+    try {
+      await api('/auth/reset', { method: 'POST', body: { token, password } });
+      resetDone = true;
+      await completeAuth();
+      toast('Contraseña actualizada. Las demás sesiones se cerraron.');
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function submitAdminSearch(form) {
+    const data = new FormData(form);
+    adminQuery = String(data.get('q') || '').trim();
+    adminRoleFilter = String(data.get('role') || '');
+    await loadAdminDashboard(true);
+  }
+
+  async function submitAdminPush(form) {
+    const data = new FormData(form);
+    const title = String(data.get('title') || '').trim();
+    const body = String(data.get('body') || '').trim();
+    const url = String(data.get('url') || '').trim();
+    if (title.length < 2 || body.length < 2) {
+      toast('Completá un título y un mensaje para el aviso.', true);
+      return;
+    }
+    const button = form.querySelector('[type="submit"]');
+    setBusy(button, true, 'Enviando…');
+    try {
+      const result = await api('/admin/push', { method: 'POST', body: { title, body, url } });
+      form.reset();
+      toast(result.total ? `Aviso enviado a ${result.sent} de ${result.total} dispositivos.` : 'No hay dispositivos suscriptos para recibir el aviso.', !result.total);
+      await loadAdminDashboard(true);
     } finally {
       setBusy(button, false);
     }
   }
 
   function submitHeroSearch(form) {
-    const q = String(new FormData(form).get('q') || '').trim();
-    db.market = Object.assign({}, db.market, { q, cat: 'Todos', onlyFav: false, producerId: '', maxPrice: 0 });
+    const q = String(new FormData(form).get('q') || '').trim();    db.market = Object.assign({}, db.market, { q, cat: 'Todos', onlyFav: false, producerId: '', maxPrice: 0 });
     save();
     marketFocusPending = true;
     go('#/market');
@@ -215,11 +305,15 @@
     const draft = readCheckout(form);
     checkoutDraft = Object.assign({}, checkoutDraft, draft);
     const errors = {};
+    if (!db.user.emailVerified) {
+      toast('Verificá tu correo antes de confirmar el pedido. Podés reenviar el enlace desde el aviso de arriba.', true);
+      return;
+    }
     if (!draft.name || draft.name.length < 2) errors.name = 'Ingresá el nombre de quien recibe.';
     if (!/^[0-9+()\s-]{6,20}$/.test(draft.phone)) errors.phone = 'Ingresá un WhatsApp válido.';
     if (draft.mode === 'delivery' && draft.address.trim().length < 5) errors.address = 'Ingresá la dirección de entrega.';
     if (draft.mode === 'pickup' && !draft.pointId) errors.pointId = 'Elegí un punto de retiro.';
-    if (!draft.terms) errors.terms = 'Confirmá que coordinás la entrega y el pago por WhatsApp.';
+    if (!draft.terms) errors.terms = 'Confirmá que coordinás la entrega y el pago.';
     if (!cartDetails().length) errors.items = 'Tu canasta está vacía o cambió el stock.';
     checkoutErrors = errors;
     if (Object.keys(errors).length) {
@@ -237,6 +331,7 @@
           name: draft.name,
           phone: draft.phone,
           city: draft.city,
+          taxId: draft.taxId,
           note: draft.note,
           mode: draft.mode,
           pointId: draft.pointId,
@@ -257,13 +352,26 @@
         city: draft.city,
         address: draft.mode === 'delivery' ? draft.address : db.buyer.address
       });
-      if (db.user) Object.assign(db.user, { name: draft.name, phone: draft.phone, city: draft.city, address: db.buyer.address });
+      if (db.user) Object.assign(db.user, { name: draft.name, phone: draft.phone, city: draft.city, address: db.buyer.address, taxId: draft.taxId || db.user.taxId });
       db.cart = [];
       saveCart();
       checkoutDraft = null;
       checkoutErrors = {};
       save();
-      toast(`Pedido ${order.code} registrado. Coordiná el pago con cada productor.`);
+      if (draft.payment === 'mercadopago' && FEATURES.payments.enabled) {
+        try {
+          const payment = await api('/orders/' + encodeURIComponent(order.id) + '/payment', { method: 'POST' });
+          if (payment.initPoint) {
+            window.location.href = payment.initPoint;
+            return;
+          }
+          toast('El pedido quedó registrado, pero Mercado Pago no devolvió un enlace de pago. Reintentá desde el pedido.', true);
+        } catch (error) {
+          toast('El pedido quedó registrado, pero no se pudo abrir Mercado Pago: ' + error.message, true);
+        }
+      } else {
+        toast(`Pedido ${order.code} registrado. Coordiná el pago con cada productor.`);
+      }
       go('#/order/' + order.id);
     } finally {
       setBusy(button, false);
@@ -297,7 +405,8 @@
       name: String(data.get('name') || '').trim(),
       phone: String(data.get('phone') || '').trim(),
       city: String(data.get('city') || 'Formosa Capital'),
-      address: String(data.get('address') || '').trim()
+      address: String(data.get('address') || '').trim(),
+      taxId: String(data.get('taxId') || '').trim()
     };
     const button = form.querySelector('[type="submit"]');
     clearFieldErrors(form);
@@ -414,7 +523,9 @@
       pickup: String(data.get('pickup') || '').trim(),
       practices: String(data.get('practices') || '').split(',').map((x) => x.trim()).filter(Boolean),
       accent: String(data.get('accent') || '#9b6239'),
-      story: String(data.get('story') || '').trim()
+      story: String(data.get('story') || '').trim(),
+      taxId: String(data.get('taxId') || '').trim(),
+      invoiceName: String(data.get('invoiceName') || '').trim()
     };
     const button = form.querySelector('[type="submit"]');
     clearFieldErrors(form);
@@ -439,6 +550,7 @@
       name: String(data.get('name') || '').trim(),
       phone: String(data.get('phone') || '').trim(),
       city: String(data.get('city') || 'Formosa Capital'),
+      taxId: String(data.get('taxId') || '').trim(),
       note: String(data.get('note') || '').trim(),
       mode: String(data.get('mode') || 'pickup'),
       pointId: String(data.get('pointId') || ''),
@@ -453,6 +565,13 @@
     if (error && error.status === 401) {
       toast('Tu sesión venció. Volvé a entrar.', true);
       logoutLocal();
+      return;
+    }
+    if (error && error.code === 'email_unverified') {
+      if (db && db.user) db.user.emailVerified = false;
+      save();
+      toast(error.message || 'Verificá tu correo para continuar.', true);
+      render();
       return;
     }
     if (error && error.fields) {
@@ -506,9 +625,181 @@
       authError = '';
       render();
     },
+    'forgot-link'() {
+      forgotEmail = '';
+      forgotError = '';
+      forgotSent = false;
+      go('#/forgot');
+    },
+    async 'resend-verification'(el) {
+      setBusy(el, true, 'Enviando…');
+      try {
+        const result = await api('/auth/resend-verification', { method: 'POST' });
+        if (result.alreadyVerified) {
+          if (db.user) db.user.emailVerified = true;
+          save();
+          toast('Tu correo ya estaba verificado.');
+          render();
+          return;
+        }
+        toast(result.delivery === 'outbox'
+          ? 'El enlace nuevo quedó en la cola local del servidor (sin SMTP configurado).'
+          : 'Te enviamos un enlace nuevo. Revisá también la carpeta de spam.');
+      } finally {
+        setBusy(el, false);
+      }
+    },
+    async 'push-toggle'(el) {
+      if (!FEATURES.push.enabled) {
+        toast('El servidor todavía no tiene configuradas las notificaciones push.', true);
+        return;
+      }
+      setBusy(el, true, '…');
+      try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+          toast('Este navegador no admite notificaciones push. En iPhone, agregá la app a inicio y usá iOS 16.4 o superior.', true);
+          return;
+        }
+        if (FEATURES.push.subscribed) {
+          const registration = await navigator.serviceWorker.ready;
+          const subscription = await registration.pushManager.getSubscription();
+          if (subscription) {
+            await api('/push/subscribe', { method: 'DELETE', body: { endpoint: subscription.endpoint } });
+            await subscription.unsubscribe();
+          }
+          FEATURES.push.subscribed = false;
+          save();
+          render();
+          toast('Notificaciones desactivadas en este dispositivo.');
+          return;
+        }
+        if (!('Notification' in window)) {
+          toast('Este navegador no admite notificaciones.', true);
+          return;
+        }
+        if (Notification.permission === 'denied') {
+          toast('Bloqueaste las notificaciones. Habilitalas desde la configuración del navegador para este sitio.', true);
+          return;
+        }
+        const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+        if (permission !== 'granted') {
+          toast('No otorgaste permiso para mostrar notificaciones.', true);
+          return;
+        }
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(FEATURES.push.publicKey)
+          });
+        }
+        await api('/push/subscribe', { method: 'POST', body: { subscription: subscription.toJSON() } });
+        FEATURES.push.subscribed = true;
+        save();
+        render();
+        toast('Notificaciones activadas. Podés enviar una prueba.');
+      } catch (error) {
+        toast('No se pudieron activar las notificaciones: ' + (error.message || 'revisá los permisos del navegador.'), true);
+      } finally {
+        setBusy(el, false);
+      }
+    },
+    async 'push-test'(el) {
+      setBusy(el, true, 'Enviando…');
+      try {
+        const result = await api('/push/test', { method: 'POST' });
+        toast(result.sent ? 'Prueba enviada. Debería aparecer en unos segundos.' : result.total ? 'El servicio de push rechazó el envío. Revisá las claves VAPID.' : 'No hay suscripciones guardadas en este dispositivo.', !result.sent);
+      } finally {
+        setBusy(el, false);
+      }
+    },
+    async 'pay-order'(el) {
+      setBusy(el, true, 'Abriendo…');
+      try {
+        const result = await api('/orders/' + encodeURIComponent(el.dataset.id) + '/payment', { method: 'POST' });
+        if (!result.initPoint) throw new Error('Mercado Pago no devolvió un enlace de pago.');
+        window.location.href = result.initPoint;
+      } catch (error) {
+        toast(error.message || 'No se pudo iniciar el pago online.', true);
+      } finally {
+        setBusy(el, false);
+      }
+    },
+    async 'panel-invoice'(el) {
+      setBusy(el, true, 'Emitiendo…');
+      try {
+        const result = await api('/panel/orders/' + encodeURIComponent(el.dataset.order) + '/invoice', { method: 'POST' });
+        toast(result.existing ? `El comprobante ${result.invoice.number} ya existía.` : `Comprobante ${result.invoice.number} emitido.`);
+        if (db.user) {
+          try {
+            const fresh = await api('/bootstrap');
+            applyConfig(fresh.config);
+            hydrate(fresh);
+            save();
+          } catch (_) {}
+        }
+        render();
+      } finally {
+        setBusy(el, false);
+      }
+    },
+    async 'admin-reload'(el) {
+      if (el) setBusy(el, true, '…');
+      adminData = null;
+      adminError = '';
+      await loadAdminDashboard(true);
+      if (el) setBusy(el, false);
+    },
+    async 'admin-user-field'(el) {
+      const field = el.dataset.field;
+      const value = el.dataset.value === 'true';
+      if (field === 'suspended' && value && !confirm('¿Suspender esta cuenta? Se cerrarán sus sesiones y no podrá ingresar.')) return;
+      if (field === 'isAdmin' && value && !confirm('¿Dar permisos de administración a esta cuenta? Podrá ver y modificar todo el marketplace.')) return;
+      setBusy(el, true, '…');
+      try {
+        await api('/admin/users/' + encodeURIComponent(el.dataset.id), {
+          method: 'PATCH',
+          body: { [field]: value }
+        });
+        toast('Cuenta actualizada.');
+        await loadAdminDashboard(true);
+      } finally {
+        setBusy(el, false);
+      }
+    },
+    async 'admin-payment'(el) {
+      const orderId = el.dataset.id;
+      const select = document.querySelector(`[data-admin-payment="${orderId}"]`);
+      const status = select ? select.value : '';
+      if (!status) return;
+      if (!confirm(`¿Marcar el pedido como pago ${paymentStatusLabel(status).toLowerCase()}? Queda registrado en la auditoría.`)) return;
+      setBusy(el, true, '…');
+      try {
+        await api('/admin/orders/' + encodeURIComponent(orderId) + '/payment', {
+          method: 'PATCH', body: { status }
+        });
+        toast('Estado del pago actualizado.');
+        await loadAdminDashboard(true);
+      } finally {
+        setBusy(el, false);
+      }
+    },
+    async 'admin-invoice'(el) {
+      setBusy(el, true, 'Emitiendo…');
+      try {
+        const result = await api('/admin/orders/' + encodeURIComponent(el.dataset.order) + '/invoice', {
+          method: 'POST', body: { producerId: el.dataset.producer }
+        });
+        toast(result.existing ? `El comprobante ${result.invoice.number} ya existía.` : `Comprobante ${result.invoice.number} emitido.`);
+        await loadAdminDashboard(true);
+      } finally {
+        setBusy(el, false);
+      }
+    },
     async 'demo-login'(el) {
-      const role = el.dataset.role === 'producer' ? 'producer' : 'buyer';
-      const email = role === 'producer' ? 'finca@innovaagro.app' : 'demo@innovaagro.app';
+      const role = el.dataset.role === 'producer' ? 'producer' : el.dataset.role === 'admin' ? 'admin' : 'buyer';
+      const email = role === 'producer' ? 'finca@innovaagro.app' : role === 'admin' ? 'admin@innovaagro.app' : 'demo@innovaagro.app';
       authFields = { email };
       authError = '';
       setBusy(el, true, 'Entrando…');
@@ -1160,3 +1451,100 @@
     renderTimer();
   }
 })();
+
+/* ---------- funciones asíncronas invocadas desde el núcleo ---------- */
+async function verifyEmailFromRoute(token) {
+  if (!token) return;
+  if (verifyState.token === token && verifyState.status !== 'loading') return;
+  if (verifyTokenInFlight === token) return;
+  verifyTokenInFlight = token;
+  verifyState = { status: 'loading', message: '', email: '', token };
+  try {
+    const result = await api('/auth/verify-email', { method: 'POST', body: { token } });
+    verifyState = { status: 'success', message: '', email: result.email || '', token };
+    if (db && db.user) {
+      db.user.emailVerified = true;
+      save();
+    }
+  } catch (error) {
+    verifyState = { status: 'error', message: error.message || 'El enlace no es válido o venció.', email: '', token };
+  } finally {
+    verifyTokenInFlight = '';
+    if (parseRoute().page === 'verify') render();
+  }
+}
+
+async function refreshOrderAfterPayment(orderId, query) {
+  if (!orderId || paymentReturnHandled === location.hash) return;
+  paymentReturnHandled = location.hash;
+  let tries = 0;
+  while (tries < 5) {
+    tries += 1;
+    try {
+      const result = await api('/orders/' + encodeURIComponent(orderId));
+      const order = result.order;
+      if (order && db) {
+        const index = db.orders.findIndex((item) => item.id === order.id);
+        if (index >= 0) db.orders[index] = order;
+        else db.orders.unshift(order);
+        save();
+      }
+      if (!order || order.paymentStatus !== 'pendiente' || !/payment=success/.test(query)) {
+        if (parseRoute().page === 'order' && parseRoute().param === orderId) render();
+        return;
+      }
+    } catch (_) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2200));
+  }
+  if (parseRoute().page === 'order' && parseRoute().param === orderId) render();
+}
+
+async function loadAdminDashboard(force = false) {
+  if (!isAdmin() || adminLoading) return;
+  if (adminData && !force) return;
+  adminLoading = true;
+  adminError = '';
+  try {
+    const params = new URLSearchParams();
+    if (adminQuery) params.set('q', adminQuery);
+    if (adminRoleFilter) params.set('role', adminRoleFilter);
+    adminData = await api('/admin/dashboard' + (params.toString() ? '?' + params.toString() : ''));
+  } catch (error) {
+    if (error.status === 401 || error.status === 403) {
+      adminError = 'La sesión administrativa venció o no tiene permisos.';
+    } else {
+      adminError = error.message || 'No se pudo cargar el panel.';
+    }
+    if (!adminData) adminData = null;
+  } finally {
+    adminLoading = false;
+    const page = parseRoute().page;
+    if (page === 'admin' || page === 'admin/users' || page === 'admin/orders') render();
+  }
+}
+
+async function refreshPushState() {
+  if (!FEATURES.push.enabled || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    const subscribed = Boolean(subscription);
+    if (FEATURES.push.subscribed === subscribed) return;
+    FEATURES.push.subscribed = subscribed;
+    save();
+    if (parseRoute().page === 'profile') render();
+  } catch (_) {
+    /* El estado del servidor sigue siendo válido si el navegador no responde. */
+  }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i);
+  return output;
+}

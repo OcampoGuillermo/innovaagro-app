@@ -63,6 +63,7 @@ function producerGroupCard(order, producerId) {
     </div>
     <div class="order-actions">
       <button class="btn btn-sm btn-ghost" type="button" data-action="order-wa" data-order="${order.id}" data-producer="${producerId}">${icon('chat', 'icon-sm')} Escribir por WhatsApp</button>
+      ${orderInvoice(order, producerId) ? `<a class="btn btn-sm btn-ghost" href="${orderInvoice(order, producerId).pdfUrl}">${icon('download', 'icon-sm')} Comprobante ${esc(orderInvoice(order, producerId).number)}</a>` : ''}
       ${producer.whatsapp ? '' : '<span class="tiny muted" style="align-self:center">El productor todavía no cargó su número: se abre el selector de contactos.</span>'}
     </div>
   </div>`;
@@ -84,7 +85,7 @@ function viewWelcome() {
       </div>
       <div>
         <div class="welcome-foot">${icon('shield', 'icon-sm')} Cuentas con contraseña, datos en servidor y copia local para consultar sin conexión.</div>
-        <div class="welcome-credits">El catálogo inicial es de demostración. Los productores pueden editar su perfil, stock y precios desde el panel. No se procesan pagos dentro de la app.</div>
+        <div class="welcome-credits">El catálogo inicial es de demostración. Los productores pueden editar su perfil, stock y precios desde el panel. Los pagos online se procesan con Mercado Pago cuando el servidor tiene credenciales; efectivo y transferencia se coordinan con cada productor.</div>
       </div>
     </div>
     <div class="welcome-right">
@@ -98,6 +99,7 @@ function viewWelcome() {
           <button class="auth-tab ${!login ? 'is-active' : ''}" type="button" role="tab" aria-selected="${!login}" data-action="auth-mode" data-mode="register">Crear cuenta</button>
         </div>
         ${authError ? `<div class="auth-alert" role="alert">${icon('info', 'icon-sm')}<span>${esc(authError)}</span></div>` : ''}
+        ${authNotice ? `<div class="auth-notice" role="status">${icon('check', 'icon-sm')}<span>${esc(authNotice)}</span></div>` : ''}
         ${bootError ? `<div class="auth-alert" role="alert">${icon('info', 'icon-sm')}<span>${esc(bootError)}</span></div>` : ''}
 
         ${login ? `
@@ -112,6 +114,7 @@ function viewWelcome() {
             <input id="auth-password" name="password" type="password" autocomplete="current-password" placeholder="Tu contraseña" required>
             <span class="field-error" data-err="password" hidden></span>
           </div>
+          <div class="auth-forgot"><button type="button" class="link-btn" data-action="forgot-link">Olvidé mi contraseña</button></div>
           <button class="btn btn-primary btn-block btn-lg" type="submit">${icon('user', 'icon-sm')} Entrar</button>
         </form>
         <div class="auth-demo">
@@ -120,6 +123,7 @@ function viewWelcome() {
           <div class="auth-demo-btns">
             <button class="btn btn-sm btn-ghost" type="button" data-action="demo-login" data-role="buyer">Entrar como compradora</button>
             <button class="btn btn-sm btn-ghost" type="button" data-action="demo-login" data-role="producer">Entrar como productor</button>
+            <button class="btn btn-sm btn-ghost" type="button" data-action="demo-login" data-role="admin">Entrar como admin</button>
           </div>
         </div>
         <p class="auth-switch">¿Primera vez? <button type="button" data-action="auth-mode" data-mode="register">Creá una cuenta</button></p>
@@ -176,10 +180,90 @@ function viewWelcome() {
         </form>
         <p class="auth-switch">¿Ya tenés cuenta? <button type="button" data-action="auth-mode" data-mode="login">Entrá</button></p>
         `}
-        <p class="auth-legal">Fotografías de referencia con licencias abiertas. <button type="button" class="link-btn" data-action="open-credits">Créditos y alcance</button>.</p>
+        <p class="auth-legal">Te vamos a pedir verificar tu correo antes de comprar o publicar. Fotografías de referencia con licencias abiertas. <button type="button" class="link-btn" data-action="open-credits">Créditos y alcance</button>.</p>
       </div>
     </div>
   </div>`;
+}
+
+function authStandalone(content) {
+  return `<div class="wrap page auth-page">
+    <div class="auth-standalone">
+      <a class="auth-brand" href="#/welcome">${brandMark(46)}<span><strong>InnovaAgro<span>-App</span></strong><small>Tecnología &amp; Naturaleza · Formosa</small></span></a>
+      ${content}
+      <p class="auth-legal">¿Necesitás ayuda? Escribinos a <a href="mailto:hola@innovaagro.app">hola@innovaagro.app</a>.</p>
+    </div>
+  </div>`;
+}
+
+function viewForgot() {
+  if (forgotSent) {
+    return authStandalone(`<div class="auth-shell">
+      <div class="auth-result">${icon('check')}</div>
+      <h1>Revisá tu correo</h1>
+      <p>Si <strong>${esc(forgotEmail)}</strong> está registrado, te enviamos un enlace para elegir una contraseña nueva. Vence en 30 minutos.</p>
+      <p class="muted">Revisá también la carpeta de spam o correo no deseado.</p>
+      <a class="btn btn-primary btn-block" href="#/welcome">Volver al ingreso</a>
+      <button class="btn btn-ghost btn-block mt-8" type="button" data-action="forgot-link">Usar otro correo</button>
+    </div>`);
+  }
+  return authStandalone(`<div class="auth-shell">
+    <p class="mono-label">Recuperar acceso</p>
+    <h1>Olvidé mi contraseña</h1>
+    <p>Ingresá el correo de tu cuenta. Te enviaremos un enlace de un solo uso para crear una contraseña nueva.</p>
+    ${forgotError ? `<div class="auth-alert" role="alert">${icon('info', 'icon-sm')}<span>${esc(forgotError)}</span></div>` : ''}
+    <form class="auth-form" data-form="forgot" novalidate>
+      <div class="field">
+        <label for="forgot-email">Correo electrónico</label>
+        <input id="forgot-email" name="email" type="email" inputmode="email" autocomplete="email" value="${esc(forgotEmail)}" placeholder="vos@correo.com" required autofocus>
+        <span class="field-error" data-err="email" hidden></span>
+      </div>
+      <button class="btn btn-primary btn-block btn-lg" type="submit">Enviar enlace</button>
+    </form>
+    <p class="auth-switch"><a href="#/welcome">Volver al ingreso</a></p>
+  </div>`);
+}
+
+function viewReset(token) {
+  if (!token) {
+    return authStandalone(`<div class="auth-shell"><div class="auth-result is-error">${icon('x')}</div><h1>Enlace incompleto</h1><p>El enlace de recuperación no es válido. Pedí uno nuevo desde el ingreso.</p><a class="btn btn-primary btn-block" href="#/forgot">Pedir otro enlace</a></div>`);
+  }
+  if (resetDone) {
+    return authStandalone(`<div class="auth-shell"><div class="auth-result">${icon('check')}</div><h1>Contraseña actualizada</h1><p>Ya podés usar tu nueva contraseña. Cerramos las demás sesiones por seguridad.</p><a class="btn btn-primary btn-block" href="${db.user ? landingHash(db.user) : '#/welcome'}">Continuar</a></div>`);
+  }
+  return authStandalone(`<div class="auth-shell">
+    <p class="mono-label">Nueva contraseña</p>
+    <h1>Elegí una contraseña nueva</h1>
+    <p>Usá al menos 8 caracteres. El enlace vence a los 30 minutos y se puede usar una sola vez.</p>
+    ${resetError.general ? `<div class="auth-alert" role="alert">${icon('info', 'icon-sm')}<span>${esc(resetError.general)}</span></div>` : ''}
+    <form class="auth-form" data-form="reset" data-token="${esc(token)}" novalidate>
+      <div class="field">
+        <label for="reset-password">Contraseña nueva</label>
+        <input id="reset-password" name="password" type="password" autocomplete="new-password" minlength="8" required autofocus>
+        <span class="field-error" data-err="password" ${resetError.password ? '' : 'hidden'}>${esc(resetError.password || '')}</span>
+      </div>
+      <div class="field">
+        <label for="reset-repeat">Repetir contraseña</label>
+        <input id="reset-repeat" name="repeatPassword" type="password" autocomplete="new-password" minlength="8" required>
+        <span class="field-error" data-err="repeatPassword" ${resetError.repeatPassword ? '' : 'hidden'}>${esc(resetError.repeatPassword || '')}</span>
+      </div>
+      <button class="btn btn-primary btn-block btn-lg" type="submit">Guardar contraseña</button>
+    </form>
+    <p class="auth-switch"><a href="#/welcome">Volver al ingreso</a></p>
+  </div>`);
+}
+
+function viewVerify(token) {
+  if (!token) {
+    return authStandalone(`<div class="auth-shell"><div class="auth-result is-error">${icon('x')}</div><h1>Enlace incompleto</h1><p>El enlace de verificación no es válido. Ingresá a tu cuenta y pedí uno nuevo.</p><a class="btn btn-primary btn-block" href="#/welcome">Ir al ingreso</a></div>`);
+  }
+  if (verifyState.status === 'loading') {
+    return authStandalone(`<div class="auth-shell auth-loading" aria-live="polite"><div class="auth-spinner"></div><h1>Verificando tu correo</h1><p>Estamos confirmando el enlace. Esto tarda unos segundos.</p></div>`);
+  }
+  if (verifyState.status === 'success') {
+    return authStandalone(`<div class="auth-shell"><div class="auth-result">${icon('check')}</div><h1>Correo verificado</h1><p><strong>${esc(verifyState.email)}</strong> quedó confirmado. Ya podés comprar, publicar productos y recibir novedades.</p><a class="btn btn-primary btn-block" href="${db.user ? landingHash(db.user) : '#/welcome'}">${db.user ? 'Continuar' : 'Entrar a mi cuenta'}</a></div>`);
+  }
+  return authStandalone(`<div class="auth-shell"><div class="auth-result is-error">${icon('x')}</div><h1>No pudimos verificar el correo</h1><p>${esc(verifyState.message || 'El enlace venció o ya fue usado.')}</p>${db.user ? `<button class="btn btn-primary btn-block" type="button" data-action="resend-verification">Enviar un enlace nuevo</button>` : '<a class="btn btn-primary btn-block" href="#/welcome">Ir al ingreso</a>'}${db.user ? '<a class="btn btn-ghost btn-block mt-8" href="#/profile">Volver a mi perfil</a>' : ''}</div>`);
 }
 
 /* ---------- inicio ---------- */
@@ -549,9 +633,11 @@ function viewCheckout() {
   if (!items.length) return emptyPage('No hay nada para pedir', 'Tu canasta está vacía. Elegí productos de temporada y volvé a esta pantalla.', '#/market', 'Ir al mercado');
   if (!checkoutDraft) checkoutDraft = {
     name: db.buyer.name || '', phone: db.buyer.phone || '', city: db.buyer.city || 'Formosa Capital',
-    address: db.buyer.address || '', mode: 'pickup', pointId: PICKUPS[0].id, routeId: ROUTES[0].id,
+    address: db.buyer.address || '', taxId: db.user.taxId || '', mode: 'pickup', pointId: PICKUPS[0].id, routeId: ROUTES[0].id,
     payment: 'efectivo', note: '', terms: false
   };
+  if (checkoutDraft.payment === 'mercadopago' && !FEATURES.payments.enabled) checkoutDraft.payment = 'efectivo';
+  const verified = !!db.user.emailVerified;
   const d = checkoutDraft;
   const subtotal = cartSubtotal();
   const shipping = shippingFor(subtotal, d.mode);
@@ -560,7 +646,12 @@ function viewCheckout() {
   const route = ROUTES.find((r) => r.id === d.routeId) || ROUTES[0];
   const point = pointsForRoute.find((p) => p.id === d.pointId) || pointsForRoute[0];
   return `<div class="wrap page">
-    <div class="page-head"><div><h1>Finalizar pedido</h1><p>Revisá tus datos, elegí cómo recibirlo y coordiná el pago con cada productor. La app registra el pedido; el cobro se hace fuera.</p></div></div>
+    <div class="page-head"><div><h1>Finalizar pedido</h1><p>Revisá tus datos, elegí cómo recibirlo y cómo pagar. El stock se reserva al confirmar; el pago online se procesa con Mercado Pago cuando está habilitado.</p></div></div>
+    ${verified ? '' : `<div class="verify-banner" role="alert">
+      ${icon('info')}
+      <div><strong>Verificá tu correo para confirmar el pedido</strong><span>Te enviamos un enlace a <strong>${esc(db.user.email)}</strong>. Revisá spam si no llega en unos minutos.</span></div>
+      <button class="btn btn-sm btn-white" type="button" data-action="resend-verification">Reenviar enlace</button>
+    </div>`}
     <form class="checkout-grid" data-form="checkout" novalidate>
       <div>
         <section class="checkout-section">
@@ -580,6 +671,11 @@ function viewCheckout() {
           <div class="field">
             <label for="co-city">Localidad</label>
             <select id="co-city" name="city">${CITIES.map((c) => `<option ${d.city === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+          </div>
+          <div class="field">
+            <label for="co-tax">CUIT/CUIL para el comprobante <span class="hint">(opcional)</span></label>
+            <input id="co-tax" name="taxId" inputmode="numeric" value="${esc(d.taxId || '')}" placeholder="20 12345678 9" ${invalid('taxId')}>
+            ${fieldError('taxId')}
           </div>
           <div class="field" style="margin-bottom:0">
             <label for="co-note">Nota para los productores <span class="hint">(opcional)</span></label>
@@ -621,16 +717,16 @@ function viewCheckout() {
         </section>
 
         <section class="checkout-section">
-          <h2><span class="step-num">3</span> Cómo coordinás el pago</h2>
+          <h2><span class="step-num">3</span> Cómo pagás</h2>
           <div class="choice-grid" style="grid-template-columns:1fr">
             <label class="choice"><input type="radio" name="payment" value="efectivo" ${d.payment === 'efectivo' ? 'checked' : ''}><span class="choice-mark"></span><span><strong>Efectivo al recibir</strong><span>Pagás cuando retirás o cuando llega el pedido.</span></span>${icon('bag', 'icon-sm')}</label>
             <label class="choice"><input type="radio" name="payment" value="transferencia" ${d.payment === 'transferencia' ? 'checked' : ''}><span class="choice-mark"></span><span><strong>Transferencia</strong><span>El productor te pasa el alias por WhatsApp antes de la entrega.</span></span>${icon('upload', 'icon-sm')}</label>
-            <label class="choice"><input type="radio" name="payment" value="mercadopago" ${d.payment === 'mercadopago' ? 'checked' : ''}><span class="choice-mark"></span><span><strong>Mercado Pago</strong><span>Link de pago enviado por el productor. La app no procesa el cobro.</span></span>${icon('shield', 'icon-sm')}</label>
+            <label class="choice ${FEATURES.payments.enabled ? '' : 'is-disabled'}"><input type="radio" name="payment" value="mercadopago" ${d.payment === 'mercadopago' ? 'checked' : ''} ${FEATURES.payments.enabled ? '' : 'disabled'}><span class="choice-mark"></span><span><strong>Mercado Pago online</strong><span>${FEATURES.payments.enabled ? 'Te redirigimos al checkout seguro de Mercado Pago. El pedido queda confirmado al aprobarse el pago.' : 'No disponible en este servidor: faltan las credenciales de cobro.'}</span></span>${icon('shield', 'icon-sm')}</label>
           </div>
-          <div class="pay-note">${icon('info')}<span><strong>El pago se coordina fuera de la app.</strong> Al confirmar, el pedido queda como «pendiente» y se abre WhatsApp para coordinar con cada productor. No se procesa ningún cobro.</span></div>
+          <div class="pay-note">${icon('info')}<span>${FEATURES.payments.enabled ? '<strong>Pago online real con Mercado Pago.</strong> También podés elegir efectivo o transferencia y coordinar por WhatsApp. El stock se reserva al confirmar.' : '<strong>Pago online no configurado.</strong> Efectivo y transferencia se coordinan con cada productor por WhatsApp. No se simula ningún cobro.'}</span></div>
           <label class="check-row mt-16">
             <input type="checkbox" name="terms" ${d.terms ? 'checked' : ''} ${invalid('terms')}>
-            <span>Entiendo que debo confirmar disponibilidad, entrega y forma de pago por WhatsApp. Los precios y el stock pueden cambiar hasta la confirmación del productor. ${fieldError('terms')}</span>
+            <span>Entiendo que debo confirmar disponibilidad, entrega y forma de pago. Los precios y el stock pueden cambiar hasta la confirmación del productor. ${fieldError('terms')}</span>
           </label>
         </section>
       </div>
@@ -641,7 +737,7 @@ function viewCheckout() {
         <div class="summary-row"><span>${d.mode === 'pickup' ? 'Retiro en punto fijo' : 'Envío a domicilio'}</span><strong>${shipping === 0 ? 'Sin cargo' : money(shipping)}</strong></div>
         <div class="summary-total"><span>Total</span><strong>${money(subtotal + shipping)}</strong></div>
         <p class="summary-producers">Pedido dividido en ${groups.length} ${groups.length === 1 ? 'productor' : 'productores'}: ${groups.map((id) => esc(producerName(id))).join(', ')}.</p>
-        <button class="btn btn-primary btn-block btn-lg mt-16" type="submit">${icon('check', 'icon-sm')} Confirmar pedido</button>
+        <button class="btn btn-primary btn-block btn-lg mt-16" type="submit" ${verified ? '' : 'disabled'}>${icon('check', 'icon-sm')} ${verified ? 'Confirmar pedido' : 'Verificá tu correo'}</button>
         <a class="btn btn-ghost btn-block mt-8" href="#/cart">Volver a la canasta</a>
         <div class="summary-note">${icon('lock')}<span>Tus datos se guardan en tu cuenta y se comparten solo con los productores del pedido.</span></div>
       </aside>
@@ -655,17 +751,21 @@ function viewOrder(id) {
   if (!order) return emptyPage('No encontramos ese pedido', 'Puede que ya no esté disponible o no pertenezca a tu cuenta.', '#/orders', 'Ver mis pedidos');
   const status = statusOrder(order);
   const producerIds = [...new Set(order.items.map((it) => it.producerId))];
+  const payStatus = order.paymentStatus || 'pendiente';
+  const returnResult = (parseRoute().query.match(/(?:^|&)payment=([^&]+)/) || [])[1] || '';
   return `<div class="wrap page">
     <a class="back-link" href="#/orders">${icon('arrow-left', 'icon-sm')} Mis pedidos</a>
+    ${returnResult ? `<div class="payment-return payment-return-${esc(returnResult)}" role="status">${icon(returnResult === 'success' ? 'check' : 'info')}<span>${returnResult === 'success' ? 'Volviste de Mercado Pago. Estamos confirmando el pago con el servidor; el estado se actualiza solo en unos segundos.' : returnResult === 'failure' ? 'Mercado Pago informó que el pago no se completó. Podés intentarlo de nuevo desde las acciones.' : 'El pago quedó pendiente de confirmación en Mercado Pago.'}</span></div>` : ''}
     <div class="order-hero mt-8">
       <div class="check-badge">${icon(status === 'cancelado' ? 'info' : 'check')}</div>
       <div style="flex:1;min-width:0">
-        <p class="mono-label" style="color:var(--copper)">${order.demo ? 'Pedido de demostración' : 'Pedido'}</p>
-        <h1>${status === 'cancelado' ? 'Pedido cancelado' : status === 'entregado' ? 'Pedido entregado' : 'Pedido registrado'}</h1>
-        <p>${status === 'nuevo' ? 'Quedó pendiente de confirmación. Escribile a cada productor para coordinar disponibilidad y pago.' : 'Podés seguir el estado por productor y escribirle por WhatsApp. Los cambios de estado los actualiza cada productor desde su panel.'}</p>
+        <p class="mono-label" style="color:var(--copper)">${order.demo ? 'Pedido de demostración' : 'Pedido'} · ${esc(paymentLabel(order.payment))}</p>
+        <h1>${status === 'cancelado' ? 'Pedido cancelado' : status === 'entregado' ? 'Pedido entregado' : payStatus === 'pagado' ? 'Pago confirmado' : 'Pedido registrado'}</h1>
+        <p>${status === 'nuevo' ? 'Quedó pendiente de confirmación. Escribile a cada productor para coordinar disponibilidad y entrega.' : 'Podés seguir el estado por productor y escribirle por WhatsApp. Los cambios de estado los actualiza cada productor desde su panel.'}</p>
         <div class="flex flex-wrap gap-8 mt-8">
           <span class="order-code">${esc(order.code)} <button class="link-btn" type="button" data-action="copy-order" data-id="${order.id}" aria-label="Copiar código">${icon('copy', 'icon-sm')}</button></span>
           ${statusBadge(status)}
+          <span class="status ${paymentStatusClass(payStatus)}">${icon(payStatus === 'pagado' ? 'check' : 'clock', 'icon-sm')} Pago ${esc(paymentStatusLabel(payStatus))}</span>
         </div>
       </div>
       <div style="text-align:right;flex:none"><span class="tiny muted">${order.demo ? 'Total demo' : 'Total'}</span><div class="h3">${money(order.total)}</div></div>
@@ -680,16 +780,25 @@ function viewOrder(id) {
             <div class="delivery-box" style="margin-top:0"><div class="row">${icon('pin')}<div><strong>${esc(orderDeliveryText(order).split(' · ')[0])}</strong><span>${esc(orderDeliveryText(order).split(' · ').slice(1).join(' · '))}</span></div></div></div>
             <div class="summary-row mt-12"><span>Subtotal</span><strong>${money(order.subtotal)}</strong></div>
             <div class="summary-row"><span>Envío</span><strong>${order.shipping === 0 ? 'Sin cargo' : money(order.shipping)}</strong></div>
-            <div class="summary-row"><span>Pago</span><strong>${esc(paymentLabel(order.payment))} · pendiente</strong></div>
+            <div class="summary-row"><span>Pago</span><strong>${esc(paymentLabel(order.payment))} · ${esc(paymentStatusLabel(payStatus))}</strong></div>
+            ${order.paidAt ? `<div class="summary-row"><span>Acreditado</span><strong>${fmtDateTime(order.paidAt)}</strong></div>` : ''}
+            ${order.paymentDetail ? `<p class="tiny muted mt-8">Detalle del pago: ${esc(order.paymentDetail)}</p>` : ''}
             <div class="summary-total"><span>Total</span><strong>${money(order.total)}</strong></div>
             ${order.note ? `<p class="small muted mt-8">Nota: ${esc(order.note)}</p>` : ''}
           </div>
         </div>
-        <div class="notice">${icon('info')}<span>El pedido no generó un cobro dentro de la app. Cada productor actualiza el estado de su parte desde el panel.</span></div>
+        ${(order.invoices || []).length ? `<div class="order-card">
+          <div class="order-card-head"><div><div class="mono-label">Documentos</div><h2>Comprobantes internos</h2></div>${icon('download')}</div>
+          <div class="order-card-body">
+            ${order.invoices.map((inv) => `<div class="invoice-row"><div><strong>${esc(inv.number)}</strong><span>${esc(inv.sellerName)} · ${fmtDateTime(inv.issuedAt)}</span><small>${esc(inv.note)}</small></div><a class="btn btn-sm btn-ghost" href="${inv.pdfUrl}">${icon('download', 'icon-sm')} PDF</a></div>`).join('')}
+          </div>
+        </div>` : ''}
+        <div class="notice">${icon('info')}<span>${order.payment === 'mercadopago' && FEATURES.payments.enabled ? 'El cobro online lo procesa Mercado Pago. Si el pago no se acredita, podés reintentarlo desde las acciones.' : 'Efectivo y transferencia se coordinan directamente con cada productor. La app no simula cobros.'} Los comprobantes son internos: no válidos como factura fiscal.</span></div>
       </div>
       <aside class="summary">
         <h2>Acciones</h2>
-        <button class="btn btn-primary btn-block" type="button" data-action="order-buyer-wa" data-id="${order.id}">${icon('chat', 'icon-sm')} Consultar el pedido</button>
+        ${canPayOnline(order) ? `<button class="btn btn-primary btn-block" type="button" data-action="pay-order" data-id="${order.id}">${icon('shield', 'icon-sm')} Pagar con Mercado Pago</button>` : ''}
+        <button class="btn ${canPayOnline(order) ? 'btn-ghost mt-8' : 'btn-primary'} btn-block" type="button" data-action="order-buyer-wa" data-id="${order.id}">${icon('chat', 'icon-sm')} Consultar el pedido</button>
         <button class="btn btn-ghost btn-block mt-8" type="button" data-action="share-order" data-id="${order.id}">${icon('share', 'icon-sm')} Compartir resumen</button>
         <button class="btn btn-ghost btn-block mt-8" type="button" data-action="ics-order" data-id="${order.id}">${icon('calendar', 'icon-sm')} Agregar al calendario</button>
         <button class="btn btn-ghost btn-block mt-8" type="button" data-action="repeat-order" data-id="${order.id}">${icon('bag', 'icon-sm')} Volver a pedir</button>
@@ -917,6 +1026,7 @@ function viewPitch() {
 /* ---------- perfil ---------- */
 function viewProfile() {
   const isProducer = db.role === 'producer';
+  const admin = isAdmin();
   const producer = ownProducer();
   const orders = db.orders.length;
   const favs = (db.buyer.favorites || []).length;
@@ -927,11 +1037,16 @@ function viewProfile() {
       <div class="profile-avatar">${isProducer ? esc((producer || {}).initials || 'PD') : esc(initials(db.buyer.name || 'Innova Agro'))}</div>
       <div>
         <h1>${esc(isProducer ? (producer || {}).owner || user.name || 'Productor' : db.buyer.name || 'Mi perfil')}</h1>
-        <p>${isProducer ? esc(((producer || {}).name || 'Mi emprendimiento') + ' · ' + ((producer || {}).place || 'Formosa')) : esc(db.buyer.city || 'Formosa Capital')} · ${isProducer ? 'Panel de productor' : 'Comprador'}</p>
-        <p class="account-email mt-8">${icon('user', 'icon-sm')} ${esc(user.email || '')}</p>
+        <p>${isProducer ? esc(((producer || {}).name || 'Mi emprendimiento') + ' · ' + ((producer || {}).place || 'Formosa')) : esc(db.buyer.city || 'Formosa Capital')} · ${admin ? 'Administración' : isProducer ? 'Panel de productor' : 'Comprador'}</p>
+        <p class="account-email mt-8">${icon('user', 'icon-sm')} ${esc(user.email || '')} ${user.emailVerified ? '<span class="verify-pill">' + icon('check', 'icon-sm') + ' Verificado</span>' : '<span class="verify-pill is-pending">Sin verificar</span>'}</p>
       </div>
-      <span class="role">${tag(isProducer ? 'Productor' : 'Comprador', 'tag-copper')}</span>
+      <span class="role">${tag(admin ? 'Administración' : isProducer ? 'Productor' : 'Comprador', admin ? 'tag-indigo' : 'tag-copper')}</span>
     </div>
+    ${user.emailVerified ? '' : `<div class="verify-banner" role="alert">
+      ${icon('info')}
+      <div><strong>Tu correo todavía no está verificado</strong><span>No vas a poder confirmar pedidos ni publicar productos hasta confirmar <strong>${esc(user.email)}</strong>.</span></div>
+      <button class="btn btn-sm btn-white" type="button" data-action="resend-verification">Reenviar enlace</button>
+    </div>`}
     <div class="stat-row">
       <div class="stat-cell"><span>Pedidos</span><strong>${orders}</strong><small>en tu cuenta</small></div>
       <div class="stat-cell"><span>Favoritos</span><strong>${favs}</strong><small>productos guardados</small></div>
@@ -948,6 +1063,7 @@ function viewProfile() {
             <a class="menu-item" href="#/learn">${icon('book')}<span><strong>Aprender</strong><span>Cápsulas, audio y constructor de pitch</span></span><span class="chev">${icon('chevron-right', 'icon-sm')}</span></a>
             ${isProducer ? `<a class="menu-item" href="#/panel">${icon('store')}<span><strong>Panel del productor</strong><span>Productos, stock y pedidos</span></span><span class="chev">${icon('chevron-right', 'icon-sm')}</span></a>
             <a class="menu-item" href="#/panel/profile">${icon('leaf')}<span><strong>Perfil público de la finca</strong><span>Historia, WhatsApp, foto y zona de reparto</span></span><span class="chev">${icon('chevron-right', 'icon-sm')}</span></a>` : ''}
+            ${admin ? `<a class="menu-item" href="#/admin">${icon('shield')}<span><strong>Panel de administración</strong><span>Cuentas, pedidos, pagos, comprobantes y avisos</span></span><span class="chev">${icon('chevron-right', 'icon-sm')}</span></a>` : ''}
           </div>
         </div>
 
@@ -963,6 +1079,7 @@ function viewProfile() {
               <div class="field"><label for="me-city">Localidad</label><select id="me-city" name="city">${CITIES.map((c) => `<option ${((user.city || 'Formosa Capital') === c) ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
               <div class="field"><label for="me-address">Dirección habitual <span class="hint">(opcional)</span></label><input id="me-address" name="address" value="${esc(user.address || '')}" placeholder="Calle, número, barrio" autocomplete="street-address"></div>
             </div>
+            <div class="field"><label for="me-tax">CUIT/CUIL <span class="hint">(opcional, para comprobantes)</span></label><input id="me-tax" name="taxId" inputmode="numeric" value="${esc(user.taxId || '')}" placeholder="20 12345678 9"><span class="inline-hint">Se incluye en los comprobantes internos. No reemplaza una factura fiscal.</span></div>
             <div class="field"><label>Correo electrónico</label><input value="${esc(user.email || '')}" disabled><span class="inline-hint">El correo identifica tu cuenta y no se puede cambiar desde acá.</span></div>
             <div class="form-actions"><button class="btn btn-primary" type="submit">${icon('check', 'icon-sm')} Guardar datos</button><span class="session-note">${icon('shield', 'icon-sm')} Solo lo ven los productores de tus pedidos.</span></div>
           </form>
@@ -983,6 +1100,17 @@ function viewProfile() {
       </div>
 
       <div>
+        <div class="profile-section">
+          <h2>Notificaciones push</h2>
+          <div class="about-card">
+            <p>Recibí avisos de pedidos, cambios de estado y pagos aun con la app cerrada. El navegador te va a pedir permiso; podés desactivarlo cuando quieras.</p>
+            ${FEATURES.push.enabled ? `<div class="flex gap-8 flex-wrap mt-12">
+              <button class="btn btn-sm ${FEATURES.push.subscribed ? 'btn-ghost' : 'btn-primary'}" type="button" data-action="push-toggle">${icon(FEATURES.push.subscribed ? 'x' : 'shield', 'icon-sm')} ${FEATURES.push.subscribed ? 'Desactivar en este dispositivo' : 'Activar notificaciones'}</button>
+              ${FEATURES.push.subscribed ? `<button class="btn btn-sm btn-ghost" type="button" data-action="push-test">${icon('bell', 'icon-sm')} Enviar prueba</button>` : ''}
+            </div>` : `<p class="inline-hint">${icon('info', 'icon-sm')} El servidor todavía no tiene configuradas las claves VAPID.</p>`}
+            <p class="tiny muted mt-12">Estado: ${FEATURES.push.subscribed ? 'activadas en este dispositivo' : 'sin suscripción guardada'}. Los avisos no reemplazan el correo de verificación.</p>
+          </div>
+        </div>
         <div class="profile-section">
           <h2>Preferencias</h2>
           <div class="about-card">

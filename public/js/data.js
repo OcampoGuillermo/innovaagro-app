@@ -43,12 +43,20 @@ let CATEGORIES = [];
 let CITIES = [];
 let ROUTES = [];
 let PICKUPS = [];
+let FEATURES = {
+  payments: { enabled: false, provider: 'mercadopago' },
+  push: { enabled: false, publicKey: '', subscribed: false },
+  invoices: { fiscal: false, note: 'Comprobante interno de venta. No válido como factura fiscal.' }
+};
 
 function applyConfig(config) {
   CATEGORIES = Array.isArray(config.categories) ? config.categories : [];
   CITIES = Array.isArray(config.cities) ? config.cities : [];
   ROUTES = Array.isArray(config.routes) ? config.routes : [];
   PICKUPS = Array.isArray(config.pickups) ? config.pickups : [];
+  if (config.features && typeof config.features === 'object') {
+    FEATURES = Object.assign({}, FEATURES, config.features);
+  }
 }
 
 const CREDITS = [

@@ -21,6 +21,21 @@ let authMode = 'login';
 let authRole = 'buyer';
 let authError = '';
 let authFields = {};
+let authNotice = '';
+let forgotEmail = '';
+let forgotSent = false;
+let forgotError = '';
+let resetError = {};
+let resetDone = false;
+let verifyState = { status: 'loading', message: '', email: '' };
+let verifyTokenInFlight = '';
+let adminData = null;
+let adminLoading = false;
+let adminError = '';
+let adminTab = 'users';
+let adminQuery = '';
+let adminRoleFilter = '';
+let paymentReturnHandled = '';
 let bootError = '';
 let lastUserId = '';
 try { lastUserId = localStorage.getItem('innovaagro.lastUser') || ''; } catch (_) {}
@@ -42,10 +57,11 @@ const photoSrc = (value) => {
 
 /* ---------- API ---------- */
 class ApiError extends Error {
-  constructor(message, status = 0, fields = null) {
+  constructor(message, status = 0, fields = null, code = '') {
     super(message);
     this.status = status;
     this.fields = fields;
+    this.code = code;
   }
 }
 
@@ -65,7 +81,7 @@ async function api(path, options = {}) {
     throw new ApiError('No hay conexión con el servidor. Revisá tu red e intentá de nuevo.', 0);
   }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new ApiError(data.error || 'No se pudo completar la operación.', response.status, data.fields || null);
+  if (!response.ok) throw new ApiError(data.error || 'No se pudo completar la operación.', response.status, data.fields || null, data.code || '');
   return data;
 }
 
@@ -219,7 +235,7 @@ function snapshotPayload() {
   return {
     version: STATE_VERSION,
     savedAt: new Date().toISOString(),
-    config: { categories: CATEGORIES, cities: CITIES, routes: ROUTES, pickups: PICKUPS },
+    config: { categories: CATEGORIES, cities: CITIES, routes: ROUTES, pickups: PICKUPS, features: FEATURES },
     db
   };
 }
@@ -308,6 +324,33 @@ function paymentLabel(method) {
     'Mercado Pago': 'Mercado Pago', 'Transferencia': 'Transferencia', 'Efectivo': 'Efectivo al recibir'
   }[method] || method || 'A coordinar';
 }
+function paymentStatusLabel(status) {
+  return {
+    pendiente: 'Pendiente', pagado: 'Pagado', rechazado: 'Rechazado',
+    reembolsado: 'Reembolsado', contracargo: 'Contracargo'
+  }[status] || status || 'Pendiente';
+}
+function paymentStatusClass(status) {
+  if (status === 'pagado') return 'status-entregado';
+  if (status === 'rechazado' || status === 'contracargo') return 'status-cancelado';
+  if (status === 'reembolsado') return 'status-preparando';
+  return 'status-nuevo';
+}
+function isAdmin() {
+  return Boolean(db && db.user && db.user.isAdmin);
+}
+function orderInvoice(order, producerId) {
+  return ((order && order.invoices) || []).find((inv) => inv.producerId === producerId) || null;
+}
+function canPayOnline(order) {
+  return Boolean(order && order.payment === 'mercadopago' && FEATURES.payments.enabled &&
+    order.paymentStatus !== 'pagado' && order.paymentStatus !== 'reembolsado' && order.paymentStatus !== 'contracargo');
+}
+function landingHash(user) {
+  if (!user) return '#/welcome';
+  if (user.isAdmin) return '#/admin';
+  return user.role === 'producer' ? '#/panel' : '#/home';
+}
 function statusLabel(status) {
   return { nuevo: 'Nuevo', preparando: 'Preparando', en_ruta: 'En ruta', entregado: 'Entregado', cancelado: 'Cancelado' }[status] || status;
 }
@@ -319,7 +362,14 @@ function statusOrder(order) {
   if (states.some((s) => s === 'preparando')) return 'preparando';
   return 'nuevo';
 }
-function orderById(id) { return db && db.orders ? db.orders.find((o) => o.id === id) : null; }
+function orderById(id) {
+  if (db && db.orders) {
+    const own = db.orders.find((o) => o.id === id);
+    if (own) return own;
+  }
+  if (adminData && Array.isArray(adminData.orders)) return adminData.orders.find((o) => o.id === id) || null;
+  return null;
+}
 function producerOrders(producerId) {
   if (!db) return [];
   return db.orders.filter((o) => (o.items || []).some((it) => it.producerId === producerId));
@@ -633,8 +683,25 @@ function producerNav() {
     ['profile', 'Perfil', 'user']
   ];
 }
+function adminNav() {
+  return [
+    ['admin', 'Admin', 'shield'],
+    ['admin/users', 'Cuentas', 'user'],
+    ['admin/orders', 'Pedidos', 'bag'],
+    ['market', 'Mercado', 'market'],
+    ['profile', 'Perfil', 'user']
+  ];
+}
 function activeKey(parts) {
   const page = parts[0] || 'home';
+  if (isAdmin()) {
+    if (page === 'admin' && parts[1] === 'users') return 'admin/users';
+    if (page === 'admin' && parts[1] === 'orders') return 'admin/orders';
+    if (page === 'admin') return 'admin';
+    if (page === 'market' || page === 'product' || page === 'producer' || page === 'cart' || page === 'checkout') return 'market';
+    if (page === 'profile' || page === 'orders' || page === 'order' || page === 'publish' || page === 'about') return 'profile';
+    return page;
+  }
   if (db.role === 'producer') {
     if (page === 'panel' && parts[1] === 'products') return 'panel/products';
     if (page === 'panel' && parts[1] === 'orders') return 'panel/orders';
@@ -653,12 +720,12 @@ function activeKey(parts) {
 }
 function updateChrome(parts = []) {
   if (!db) return;
-  const nav = db.role === 'producer' ? producerNav() : buyerNav();
+  const nav = isAdmin() ? adminNav() : (db.role === 'producer' ? producerNav() : buyerNav());
   const active = activeKey(parts);
   const desk = $('#desk-nav');
   if (desk) {
     desk.innerHTML = nav.slice(0, 4).map(([href, label]) => `<a href="#/${href}" class="${active === href ? 'is-active' : ''}" ${active === href ? 'aria-current="page"' : ''}>${label}</a>`).join('') +
-      (db.role === 'producer' ? `<a href="#/producer/${db.producerId}" class="${active === 'producer' ? 'is-active' : ''}">Mi tienda</a>` : '');
+      (db.role === 'producer' && !isAdmin() ? `<a href="#/producer/${db.producerId}" class="${active === 'producer' ? 'is-active' : ''}">Mi tienda</a>` : '');
   }
   const tabs = $('#tabbar-inner');
   if (tabs) {
@@ -678,11 +745,14 @@ function updateChrome(parts = []) {
   }
   const avatar = $('#avatar-btn');
   if (avatar) {
-    const label = db.role === 'producer'
-      ? ((producerById(db.producerId) || {}).initials || 'PD')
-      : initials(db.buyer.name || 'Innova Agro');
+    const label = isAdmin()
+      ? initials(db.user.name || 'Administración')
+      : (db.role === 'producer'
+        ? ((producerById(db.producerId) || {}).initials || 'PD')
+        : initials(db.buyer.name || 'Innova Agro'));
     avatar.textContent = label;
-    avatar.setAttribute('aria-label', `${db.role === 'producer' ? 'Panel del productor' : 'Mi perfil'}, ${label}`);
+    avatar.setAttribute('aria-label', `${isAdmin() ? 'Panel de administración' : db.role === 'producer' ? 'Panel del productor' : 'Mi perfil'}, ${label}`);
+    avatar.setAttribute('href', isAdmin() ? '#/admin' : '#/profile');
   }
   const offline = $('#offline-strip');
   if (offline) offline.hidden = navigator.onLine && !db.offline;
@@ -713,21 +783,36 @@ function render() {
   const route = parseRoute();
   let page = route.page;
   let param = route.param;
-  if (!page) page = db.user ? (db.role === 'producer' ? 'panel' : 'home') : 'welcome';
+  if (!page) page = db.user ? (isAdmin() ? 'admin' : db.role === 'producer' ? 'panel' : 'home') : 'welcome';
 
-  if (db.user && page === 'welcome') { go(db.role === 'producer' ? '#/panel' : '#/home'); return; }
-  if (!db.user && page !== 'welcome') { go('#/welcome'); return; }
+  const guestPages = ['welcome', 'verify', 'reset', 'forgot'];
+  if (db.user && page === 'welcome') { go(landingHash(db.user)); return; }
+  if (!db.user && !guestPages.includes(page)) { go('#/welcome'); return; }
   if (!db.user && page === 'welcome') {
     stopSpeech();
     $('#view').innerHTML = viewWelcome();
     document.body.classList.add('welcome-mode');
     document.body.classList.remove('has-detail-bar');
     document.body.dataset.role = 'guest';
+    document.body.dataset.admin = 'false';
     document.title = 'InnovaAgro-App · Tecnología & Naturaleza';
     updateChrome([]);
     afterRender('welcome');
     return;
   }
+  if (page === 'verify' || page === 'reset' || page === 'forgot') {
+    stopSpeech();
+    $('#view').innerHTML = page === 'verify' ? viewVerify(param) : page === 'reset' ? viewReset(param) : viewForgot();
+    document.body.classList.add('welcome-mode');
+    document.body.classList.remove('has-detail-bar');
+    document.body.dataset.role = db.user ? db.role : 'guest';
+    document.body.dataset.admin = isAdmin() ? 'true' : 'false';
+    document.title = pageTitle(page, param);
+    updateChrome([]);
+    afterRender(page, param);
+    return;
+  }
+  if (page.startsWith('admin') && !isAdmin()) { go(db.user ? '#/home' : '#/welcome'); return; }
 
   if (page === 'panel') {
     const sub = route.parts[1];
@@ -736,13 +821,19 @@ function render() {
     else if (sub === 'profile') page = 'panel/profile';
     else if (sub === 'product') { page = 'panel/product'; param = route.parts[2] || 'new'; }
   }
+  if (page === 'admin') {
+    const sub = route.parts[1];
+    if (sub === 'users') page = 'admin/users';
+    else if (sub === 'orders') page = 'admin/orders';
+  }
   if (page === 'learn' && route.parts[1]) { page = 'course'; param = route.parts[1]; }
-  if (db.role === 'producer' && page === 'home') { go('#/panel'); return; }
+  if (db.role === 'producer' && !isAdmin() && page === 'home') { go('#/panel'); return; }
 
   stopSpeech();
   const detailPages = ['product'];
   document.body.classList.toggle('welcome-mode', false);
   document.body.classList.toggle('has-detail-bar', detailPages.includes(page));
+  document.body.dataset.admin = isAdmin() ? 'true' : 'false';
   if (page === 'product') {
     const key = location.hash;
     if (key !== lastRouteKey) detailQty = 1;
@@ -772,6 +863,9 @@ function render() {
     case 'panel/product': html = viewPanelProduct(param); break;
     case 'panel/orders': html = viewPanelOrders(); break;
     case 'panel/profile': html = viewPanelProfile(); break;
+    case 'admin':
+    case 'admin/users':
+    case 'admin/orders': html = viewAdmin(page); break;
     default: html = viewNotFound(); break;
   }
   const view = $('#view');
@@ -779,14 +873,16 @@ function render() {
   updateChrome(route.parts);
   document.title = pageTitle(page, param);
   window.scrollTo(0, 0);
-  afterRender(page, param);
+  afterRender(page, param, route.query);
 }
 function pageTitle(page, param) {
   const names = {
     welcome: 'Bienvenida', home: 'Inicio', market: 'Mercado', cart: 'Canasta', checkout: 'Finalizar pedido',
     orders: 'Mis pedidos', routes: 'Entregas', learn: 'Aprender', pitch: 'Constructor de pitch', profile: 'Mi perfil',
     publish: 'Publicar la app', about: 'Acerca de', panel: 'Panel del productor', 'panel/products': 'Productos',
-    'panel/orders': 'Pedidos', 'panel/profile': 'Perfil del productor', 'panel/product': 'Producto'
+    'panel/orders': 'Pedidos', 'panel/profile': 'Perfil del productor', 'panel/product': 'Producto',
+    verify: 'Verificar correo', reset: 'Nueva contraseña', forgot: 'Recuperar contraseña',
+    admin: 'Administración', 'admin/users': 'Cuentas', 'admin/orders': 'Pedidos y pagos'
   };
   if (page === 'product') return (productById(param) || {}).name || 'Producto';
   if (page === 'producer') return (producerById(param) || {}).name || 'Productor';
@@ -794,7 +890,7 @@ function pageTitle(page, param) {
   if (page === 'course') return ((COURSES.find((c) => c.id === param) || {}).title || 'Cápsula') + ' · InnovaAgro-App';
   return `${names[page] || 'InnovaAgro'} · InnovaAgro-App`;
 }
-function afterRender(page, param) {
+function afterRender(page, param, query = '') {
   if (marketFocusPending) {
     marketFocusPending = false;
     const input = $('#market-search');
@@ -808,6 +904,10 @@ function afterRender(page, param) {
     const view = $('#view');
     if (view) view.innerHTML = emptyState('store', 'Necesitás una cuenta de productor', 'Para editar un perfil público tenés que ingresar con una cuenta de productor.', '<a class="btn btn-primary" href="#/panel">Volver al panel</a>');
   }
+  if (page === 'verify') verifyEmailFromRoute(param);
+  if (page === 'profile') refreshPushState();
+  if (page === 'admin' || page === 'admin/users' || page === 'admin/orders') loadAdminDashboard();
+  if (page === 'order' && query && /payment=/.test(query)) refreshOrderAfterPayment(param, query);
 }
 
 /* ---------- filters ---------- */

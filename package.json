@@ -1,0 +1,30 @@
+{
+  "name": "innovaagro-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mercado directo entre productores de Formosa y consumidores: catálogo, pedidos, stock y perfiles públicos.",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "dev": "node --env-file-if-exists=.env --watch server/index.js",
+    "check": "node --check server/index.js && node --check server/db.js && node --check server/auth.js && node --check public/js/app-core.js && node --check public/js/app-views.js && node --check public/js/app-panel.js && node --check public/js/app-init.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "keywords": [
+    "marketplace",
+    "formosa",
+    "productores",
+    "node",
+    "sqlite",
+    "pwa"
+  ],
+  "author": "InnovaAgro",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^4.22.3",
+    "multer": "^2.4.0"
+  }
+}

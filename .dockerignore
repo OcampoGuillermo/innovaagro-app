@@ -1,0 +1,14 @@
+node_modules
+data
+public/uploads
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+*.log
+tools
+src
+PRODUCT.md
+GUIA-PUBLICACION.md
+README.md

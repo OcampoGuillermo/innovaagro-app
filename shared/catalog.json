@@ -1,0 +1,945 @@
+{
+  "categories": [
+    "Frutas",
+    "Raíces",
+    "Miel",
+    "Lácteos",
+    "Hortalizas",
+    "Artesanías",
+    "Pesca",
+    "Aromáticas"
+  ],
+  "cities": [
+    "Formosa Capital",
+    "Herradura",
+    "El Colorado",
+    "Clorinda",
+    "Las Lomitas",
+    "Laguna Blanca",
+    "Pirané",
+    "Villa Dos Trece",
+    "Ibarreta",
+    "Comandante Fontana",
+    "Otra localidad"
+  ],
+  "routes": [
+    {
+      "id": "r1",
+      "name": "Ruta del río",
+      "day": 4,
+      "dayLabel": "Jueves",
+      "zone": "Capital · Herradura · Villa Dos Trece",
+      "color": "#9b6239",
+      "cutoff": "Miércoles 18:00",
+      "stops": [
+        "Formosa Capital",
+        "Herradura",
+        "Villa Dos Trece"
+      ],
+      "note": "Sale desde el Mercado Municipal y recorre la ribera sur."
+    },
+    {
+      "id": "r2",
+      "name": "Ruta del centro",
+      "day": 5,
+      "dayLabel": "Viernes",
+      "zone": "El Colorado · Pirané",
+      "color": "#3e6b51",
+      "cutoff": "Jueves 18:00",
+      "stops": [
+        "El Colorado",
+        "Pirané"
+      ],
+      "note": "Concentra la producción de la cooperativa y las artesanas."
+    },
+    {
+      "id": "r3",
+      "name": "Ruta del norte",
+      "day": 6,
+      "dayLabel": "Sábado",
+      "zone": "Clorinda · Laguna Blanca · Las Lomitas",
+      "color": "#2b4b5d",
+      "cutoff": "Viernes 12:00",
+      "stops": [
+        "Clorinda",
+        "Laguna Blanca",
+        "Las Lomitas"
+      ],
+      "note": "Recorre el norte con paradas cortas y cadena de frío."
+    }
+  ],
+  "pickups": [
+    {
+      "id": "pt1",
+      "name": "Mercado Municipal de Formosa",
+      "address": "Av. 25 de Mayo 650, Capital",
+      "routeId": "r1",
+      "time": "08:00 a 12:00",
+      "note": "Puesto de la cooperativa, sector frutas."
+    },
+    {
+      "id": "pt2",
+      "name": "Plaza San Martín",
+      "address": "Mitre y 25 de Mayo, Capital",
+      "routeId": "r1",
+      "time": "17:00 a 19:00",
+      "note": "Feria de productores, jueves por la tarde."
+    },
+    {
+      "id": "pt3",
+      "name": "Delegación de Herradura",
+      "address": "Ruta Provincial 1, Herradura",
+      "routeId": "r1",
+      "time": "10:00 a 12:00",
+      "note": "Retiro en la oficina de turismo."
+    },
+    {
+      "id": "pt4",
+      "name": "Casa de la Cultura de El Colorado",
+      "address": "San Martín 120, El Colorado",
+      "routeId": "r2",
+      "time": "09:00 a 13:00",
+      "note": "Frente a la plaza principal."
+    },
+    {
+      "id": "pt5",
+      "name": "Cooperativa Agropecuaria de Pirané",
+      "address": "Ruta 81 km 3, Pirané",
+      "routeId": "r2",
+      "time": "14:00 a 17:00",
+      "note": "Galpón de acopio, acceso por el portón lateral."
+    },
+    {
+      "id": "pt6",
+      "name": "Puerto de Clorinda",
+      "address": "Costanera, Clorinda",
+      "routeId": "r3",
+      "time": "08:00 a 11:00",
+      "note": "Retiro en el puesto de pescadores."
+    },
+    {
+      "id": "pt7",
+      "name": "Estación de Laguna Blanca",
+      "address": "Ruta 86, Laguna Blanca",
+      "routeId": "r3",
+      "time": "12:00 a 14:00",
+      "note": "Al lado del destacamento policial."
+    },
+    {
+      "id": "pt8",
+      "name": "Estación de Las Lomitas",
+      "address": "Av. San Martín, Las Lomitas",
+      "routeId": "r3",
+      "time": "15:00 a 17:00",
+      "note": "Retiro en la terminal de ómnibus."
+    }
+  ],
+  "producers": [
+    {
+      "id": "p1",
+      "name": "Finca La Palmera",
+      "owner": "Marta Benítez",
+      "place": "Herradura",
+      "zone": "Ruta del río",
+      "since": 1998,
+      "hectares": 12,
+      "initials": "MB",
+      "accent": "#9b6239",
+      "verified": true,
+      "practices": [
+        "Agroecológico",
+        "Cosecha manual",
+        "Riego por goteo"
+      ],
+      "story": "Marta Benítez lleva 28 años en la misma chacra de Herradura. Su padre plantó los primeros pomelos y hoy ella poda, cosecha y despacha con sus dos hijas.\n\n«El pomelo se corta con la mano, nunca se golpea», dice. En temporada, la fruta sale el mismo día que se cosecha.",
+      "photo": "pomelo_tree",
+      "gallery": [
+        "pomelo_tree",
+        "hero",
+        "citricos"
+      ],
+      "whatsapp": "",
+      "alias": "",
+      "pickup": "Delegación de Herradura",
+      "role": "Productora familiar"
+    },
+    {
+      "id": "p2",
+      "name": "Cooperativa El Colorado",
+      "owner": "Ramón Ojeda",
+      "place": "El Colorado",
+      "zone": "Ruta del centro",
+      "since": 2006,
+      "hectares": 34,
+      "initials": "RO",
+      "accent": "#3e6b51",
+      "verified": true,
+      "practices": [
+        "Producción colectiva",
+        "Rotación de cultivos",
+        "Sin quemas"
+      ],
+      "story": "Catorce familias de El Colorado trabajan juntas la mandioca y la batata en suelos rojos. La cooperativa organiza la siembra, el acopio y el flete para que cada productor pueda vender sin perder lo que sembró.\n\nEl almidón se muele en el mismo galpón, sin aditivos.",
+      "photo": "farmer_field",
+      "gallery": [
+        "mandioca_plant",
+        "mandioca",
+        "farmer_field"
+      ],
+      "whatsapp": "",
+      "alias": "",
+      "pickup": "Cooperativa Agropecuaria de El Colorado",
+      "role": "Cooperativa de 14 familias"
+    },
+    {
+      "id": "p3",
+      "name": "Apiario Monte Alto",
+      "owner": "Lucía Insfrán",
+      "place": "Laguna Blanca",
+      "zone": "Ruta del norte",
+      "since": 2011,
+      "hectares": 8,
+      "initials": "LI",
+      "accent": "#a97613",
+      "verified": true,
+      "practices": [
+        "Sin alimentación con azúcar",
+        "Envasado a mano",
+        "Flora nativa"
+      ],
+      "story": "Lucía Insfrán aprendió el oficio de su abuelo en Laguna Blanca. Sus colmenas se mueven con la floración del monte y no reciben alimentación con azúcar.\n\nCada frasco se envasa a mano. La miel cambia de color y de aroma según la flor que encuentra la abeja.",
+      "photo": "beekeeper",
+      "gallery": [
+        "beekeeper",
+        "honeycomb",
+        "miel"
+      ],
+      "whatsapp": "",
+      "alias": "",
+      "pickup": "Estación de Laguna Blanca",
+      "role": "Apicultora"
+    },
+    {
+      "id": "p4",
+      "name": "Quesos del Pilcomayo",
+      "owner": "Familia Ayala",
+      "place": "Clorinda",
+      "zone": "Ruta del norte",
+      "since": 1987,
+      "hectares": 6,
+      "initials": "FA",
+      "accent": "#2b4b5d",
+      "verified": true,
+      "practices": [
+        "Leche de cabra",
+        "Prensa diaria",
+        "Sin conservantes"
+      ],
+      "story": "Los Ayala cruzan el Pilcomayo desde hace tres generaciones. La leche de cabra se ordeña de madrugada y el queso se prensa el mismo día, en un pequeño tambo familiar.\n\nNo usan conservantes: el queso se come fresco y se conserva en frío.",
+      "photo": "queso",
+      "gallery": [
+        "queso",
+        "queso_shop",
+        "farmer_woman"
+      ],
+      "whatsapp": "",
+      "alias": "",
+      "pickup": "Puerto de Clorinda",
+      "role": "Tambo familiar"
+    },
+    {
+      "id": "p5",
+      "name": "Huerta Las Lomitas",
+      "owner": "Sofía Cáceres",
+      "place": "Las Lomitas",
+      "zone": "Ruta del norte",
+      "since": 2016,
+      "hectares": 4,
+      "initials": "SC",
+      "accent": "#3e6b51",
+      "verified": true,
+      "practices": [
+        "Riego por goteo",
+        "Cobertura de rastrojo",
+        "Cosecha semanal"
+      ],
+      "story": "Sofía Cáceres siembra en Las Lomitas con riego por goteo y cobertura de rastrojo para cuidar el agua. Vende lo que cosecha esa semana: si no hay, no hay.\n\nLos pedidos se cierran el miércoles para que la verdura llegue fresca el fin de semana.",
+      "photo": "hojas",
+      "gallery": [
+        "hojas",
+        "market_greens",
+        "farmer_woman"
+      ],
+      "whatsapp": "",
+      "alias": "",
+      "pickup": "Estación de Las Lomitas",
+      "role": "Productora de hortalizas"
+    },
+    {
+      "id": "p6",
+      "name": "Mujeres del Algodón",
+      "owner": "Cooperativa de artesanas",
+      "place": "Pirané",
+      "zone": "Ruta del centro",
+      "since": 2019,
+      "hectares": 2,
+      "initials": "MA",
+      "accent": "#9b6239",
+      "verified": true,
+      "practices": [
+        "Algodón nativo",
+        "Tintes naturales",
+        "Comercio justo"
+      ],
+      "story": "Un grupo de 22 artesanas de Pirané recuperó el cultivo del algodón nativo y los tintes de corteza. Cada pieza se teje a mano y lleva el nombre de quien la hizo.\n\nEl proyecto sostiene un ingreso complementario para las familias y mantiene vivo un oficio que casi se pierde.",
+      "photo": "algodon",
+      "gallery": [
+        "algodon",
+        "algodon_open",
+        "textil"
+      ],
+      "whatsapp": "",
+      "alias": "",
+      "pickup": "Casa de la Cultura de Pirané",
+      "role": "Cooperativa de artesanas"
+    },
+    {
+      "id": "p7",
+      "name": "Frutas del Bermejo",
+      "owner": "Eusebio Romero",
+      "place": "Villa Dos Trece",
+      "zone": "Ruta del río",
+      "since": 2003,
+      "hectares": 15,
+      "initials": "ER",
+      "accent": "#a97613",
+      "verified": true,
+      "practices": [
+        "Cosecha a pedido",
+        "Cajones reutilizados",
+        "Fruta de estación"
+      ],
+      "story": "Eusebio Romero tiene mango y banana en Villa Dos Trece. La fruta se corta a pedido y viaja en cajones de madera reutilizados.\n\nEn verano, la sombra del monte y el riego del río hacen la diferencia. Eusebio vende lo que madura, no lo que se fuerza.",
+      "photo": "mango",
+      "gallery": [
+        "mango",
+        "banana",
+        "hero"
+      ],
+      "whatsapp": "",
+      "alias": "",
+      "pickup": "Plaza de Villa Dos Trece",
+      "role": "Productor frutícola"
+    },
+    {
+      "id": "p8",
+      "name": "Sabores de la Ribera",
+      "owner": "Néstor Salinas",
+      "place": "Formosa Capital",
+      "zone": "Ruta del río",
+      "since": 2014,
+      "hectares": 0,
+      "initials": "NS",
+      "accent": "#2b4b5d",
+      "verified": true,
+      "practices": [
+        "Pesca artesanal",
+        "Ahumado con quebracho",
+        "Cadena de frío"
+      ],
+      "story": "Néstor Salinas sale al río antes del amanecer. El surubí se filetea en hielo y el pacú se ahúma con leña de quebracho blanco, despacio.\n\nTrabaja con permisos de pesca y compra a otros pescadores de la ribera cuando la cuota lo permite.",
+      "photo": "pescado_grill",
+      "gallery": [
+        "pescado",
+        "pescado_grill",
+        "hero"
+      ],
+      "whatsapp": "",
+      "alias": "",
+      "pickup": "Mercado Municipal de Formosa",
+      "role": "Pescador artesanal"
+    },
+    {
+      "id": "p9",
+      "name": "Verde Vivo",
+      "owner": "Camila Ruiz",
+      "place": "Formosa Capital",
+      "zone": "Ruta del río",
+      "since": 2021,
+      "hectares": 1,
+      "initials": "CR",
+      "accent": "#3e6b51",
+      "verified": false,
+      "practices": [
+        "Cultivo urbano",
+        "Sin pesticidas",
+        "Entrega en bicicleta"
+      ],
+      "story": "Camila Ruiz cultiva microgreens y aromáticas en el patio de su casa, en el oeste de Formosa. Riega con agua de lluvia guardada y entrega en bicicleta por el centro.\n\nSu producción es chica y semanal. Avisa por WhatsApp qué hay disponible cada viernes.",
+      "photo": "hojas",
+      "gallery": [
+        "hojas",
+        "market_greens",
+        "farmer"
+      ],
+      "whatsapp": "",
+      "alias": "",
+      "pickup": "Plaza San Martín de Formosa",
+      "role": "Huerta urbana"
+    }
+  ],
+  "products": [
+    {
+      "id": "pomelo",
+      "producerId": "p1",
+      "name": "Pomelo rosado",
+      "category": "Frutas",
+      "price": 1400,
+      "unit": "kg",
+      "stock": 18,
+      "active": true,
+      "photo": "pomelo",
+      "lot": "LP-2618",
+      "featured": true,
+      "organic": true,
+      "short": "Dulce, jugoso y de cáscara fina. Se corta en Herradura y sale el mismo día.",
+      "description": "Pomelo de la temporada de primavera, cultivado sin cera de conservación. La fruta se cosecha a mano y se selecciona por tamaño. Ideal para jugo, ensaladas o para comer al natural.",
+      "highlights": [
+        "Cosecha manual",
+        "Sin cera",
+        "De Herradura"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Primavera",
+      "available": "Esta semana"
+    },
+    {
+      "id": "naranja",
+      "producerId": "p1",
+      "name": "Naranja de ombligo",
+      "category": "Frutas",
+      "price": 1200,
+      "unit": "kg",
+      "stock": 32,
+      "active": true,
+      "photo": "citricos",
+      "lot": "LP-2619",
+      "featured": false,
+      "organic": true,
+      "short": "Naranja de mesa, dulce y sin semilla. Cosecha de la misma chacra.",
+      "description": "Naranja de ombligo de la chacra de Herradura. Se cosecha cuando alcanza el punto justo de azúcar y se despacha sin baño de cera. Rinde bien para jugo y para comer en gajos.",
+      "highlights": [
+        "Sin semilla",
+        "Cosecha manual",
+        "Ideal para jugo"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Primavera",
+      "available": "Esta semana"
+    },
+    {
+      "id": "mandioca",
+      "producerId": "p2",
+      "name": "Mandioca fresca",
+      "category": "Raíces",
+      "price": 1100,
+      "unit": "kg",
+      "stock": 24,
+      "active": true,
+      "photo": "mandioca",
+      "lot": "EC-2607",
+      "featured": true,
+      "organic": false,
+      "short": "Raíz blanca de El Colorado, cosechada la noche anterior.",
+      "description": "Mandioca de pulpa blanca, firme y sin fibras. Se cosecha la noche anterior a la entrega para que llegue fresca. Ideal para hervir, freír o preparar chipa cuerito.",
+      "highlights": [
+        "Cosecha nocturna",
+        "Pulpa blanca",
+        "De El Colorado"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Todo el año",
+      "available": "Esta semana"
+    },
+    {
+      "id": "batata",
+      "producerId": "p2",
+      "name": "Batata criolla",
+      "category": "Raíces",
+      "price": 1300,
+      "unit": "kg",
+      "stock": 9,
+      "active": true,
+      "photo": "batata",
+      "lot": "EC-2608",
+      "featured": false,
+      "organic": false,
+      "short": "Batata de pulpa naranja, dulce y harinosa. Cosecha de otoño.",
+      "description": "Batata criolla de pulpa naranja, cultivada en rotación con mandioca. Tiene textura harinosa y sabor dulce. Se conserva en lugar fresco y seco.",
+      "highlights": [
+        "Pulpa naranja",
+        "Rotación de cultivos",
+        "De El Colorado"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Otoño",
+      "available": "Últimas bolsas"
+    },
+    {
+      "id": "almidon",
+      "producerId": "p2",
+      "name": "Almidón de mandioca",
+      "category": "Raíces",
+      "price": 3200,
+      "unit": "500 g",
+      "stock": 14,
+      "active": true,
+      "photo": "almidon",
+      "lot": "EC-2609",
+      "featured": false,
+      "organic": false,
+      "short": "Almidón molido en el galpón de la cooperativa, sin aditivos.",
+      "description": "Almidón de mandioca molido en el mismo galpón de la cooperativa. Sin aditivos ni blanqueadores. Sirve para chipa, panificados y para espesar guisos.",
+      "highlights": [
+        "Molido artesanal",
+        "Sin aditivos",
+        "Bolsa de 500 g"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Todo el año",
+      "available": "Esta semana"
+    },
+    {
+      "id": "miel",
+      "producerId": "p3",
+      "name": "Miel multifloral",
+      "category": "Miel",
+      "price": 9800,
+      "unit": "500 g",
+      "stock": 11,
+      "active": true,
+      "photo": "miel",
+      "lot": "MA-2631",
+      "featured": true,
+      "organic": true,
+      "short": "Miel de monte, clara y aromática. Envasada a mano en Laguna Blanca.",
+      "description": "Miel multifloral de la floración de primavera. Color ámbar claro, aroma floral y textura fluida. Las colmenas se mueven con la floración del monte y no reciben alimentación con azúcar.",
+      "highlights": [
+        "Sin azúcar agregada",
+        "Envasada a mano",
+        "Flora nativa"
+      ],
+      "harvest": "Septiembre 2026",
+      "season": "Primavera",
+      "available": "Esta semana"
+    },
+    {
+      "id": "miel_monte",
+      "producerId": "p3",
+      "name": "Miel de monte",
+      "category": "Miel",
+      "price": 17500,
+      "unit": "1 kg",
+      "stock": 4,
+      "active": true,
+      "photo": "honeycomb",
+      "lot": "MA-2632",
+      "featured": false,
+      "organic": true,
+      "short": "Lote oscuro y intenso, con aroma a monte y madera.",
+      "description": "Miel de monte de color oscuro y sabor intenso, con notas de madera y resinas. Es un lote limitado de la floración tardía. Se cristaliza naturalmente con el frío.",
+      "highlights": [
+        "Lote limitado",
+        "Aroma intenso",
+        "Sin pasteurizar"
+      ],
+      "harvest": "Agosto 2026",
+      "season": "Invierno",
+      "available": "Últimos frascos"
+    },
+    {
+      "id": "polen",
+      "producerId": "p3",
+      "name": "Polen de monte",
+      "category": "Miel",
+      "price": 6500,
+      "unit": "100 g",
+      "stock": 7,
+      "active": true,
+      "photo": "honeycomb",
+      "lot": "MA-2633",
+      "featured": false,
+      "organic": true,
+      "short": "Polen recolectado en trampa, secado a sombra y envasado en frío.",
+      "description": "Polen de las colmenas de Laguna Blanca, recolectado en trampa y secado a la sombra para conservar su color. Se envasa en frío. Consumir dentro de los seis meses.",
+      "highlights": [
+        "Secado a sombra",
+        "Envasado en frío",
+        "100 g"
+      ],
+      "harvest": "Septiembre 2026",
+      "season": "Primavera",
+      "available": "Esta semana"
+    },
+    {
+      "id": "queso_cabra",
+      "producerId": "p4",
+      "name": "Queso de cabra fresco",
+      "category": "Lácteos",
+      "price": 8900,
+      "unit": "500 g",
+      "stock": 6,
+      "active": true,
+      "photo": "queso",
+      "lot": "QP-2640",
+      "featured": true,
+      "organic": false,
+      "short": "Queso fresco de leche de cabra, prensado el mismo día del ordeñe.",
+      "description": "Queso fresco de leche de cabra, de textura suave y sabor láctico. La leche se ordeña de madrugada y el queso se prensa el mismo día. Sin conservantes. Mantener refrigerado.",
+      "highlights": [
+        "Leche de cabra",
+        "Prensa diaria",
+        "Sin conservantes"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Todo el año",
+      "available": "Esta semana"
+    },
+    {
+      "id": "queso_tybo",
+      "producerId": "p4",
+      "name": "Queso tybo artesanal",
+      "category": "Lácteos",
+      "price": 9500,
+      "unit": "kg",
+      "stock": 3,
+      "active": true,
+      "photo": "queso",
+      "lot": "QP-2641",
+      "featured": false,
+      "organic": false,
+      "short": "Queso de pasta semidura, curado 30 días en el tambo familiar.",
+      "description": "Queso tybo de pasta semidura, curado durante 30 días en el tambo de Clorinda. Sabor equilibrado y textura firme. Ideal para picadas y para gratinar.",
+      "highlights": [
+        "Curado 30 días",
+        "Tambo familiar",
+        "Pieza de 1 kg"
+      ],
+      "harvest": "Septiembre 2026",
+      "season": "Todo el año",
+      "available": "Últimas piezas"
+    },
+    {
+      "id": "dulce",
+      "producerId": "p4",
+      "name": "Dulce de leche artesanal",
+      "category": "Lácteos",
+      "price": 5800,
+      "unit": "500 g",
+      "stock": 12,
+      "active": true,
+      "photo": "dulce",
+      "lot": "QP-2642",
+      "featured": false,
+      "organic": false,
+      "short": "Dulce de leche de olla, con leche de cabra y azúcar. Sin aditivos.",
+      "description": "Dulce de leche cocido a fuego lento en olla de cobre, con leche de cabra y azúcar. Sin aditivos ni conservantes. Textura untable y sabor suave.",
+      "highlights": [
+        "Cocido a fuego lento",
+        "Leche de cabra",
+        "Sin aditivos"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Todo el año",
+      "available": "Esta semana"
+    },
+    {
+      "id": "lechuga",
+      "producerId": "p5",
+      "name": "Lechuga criolla",
+      "category": "Hortalizas",
+      "price": 1200,
+      "unit": "atado",
+      "stock": 20,
+      "active": true,
+      "photo": "hojas",
+      "lot": "HL-2650",
+      "featured": true,
+      "organic": true,
+      "short": "Lechuga de hoja suelta, cortada el viernes a la madrugada.",
+      "description": "Lechuga criolla de hoja suelta, cultivada con cobertura de rastrojo y riego por goteo. Se corta el viernes a la madrugada para que llegue firme. Lavar antes de consumir.",
+      "highlights": [
+        "Cosecha semanal",
+        "Riego por goteo",
+        "Sin pesticidas"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Primavera",
+      "available": "Viernes y sábado"
+    },
+    {
+      "id": "tomate",
+      "producerId": "p5",
+      "name": "Tomate perita",
+      "category": "Hortalizas",
+      "price": 2400,
+      "unit": "kg",
+      "stock": 8,
+      "active": true,
+      "photo": "tomate",
+      "lot": "HL-2651",
+      "featured": false,
+      "organic": true,
+      "short": "Tomate perita de campo, madurado en planta. Ideal para salsa.",
+      "description": "Tomate perita cultivado al aire libre y madurado en planta. Pulpa firme y pocas semillas, ideal para salsa, conserva o ensalada. Se cosecha según pedido.",
+      "highlights": [
+        "Madurado en planta",
+        "Ideal para salsa",
+        "Sin pesticidas"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Primavera",
+      "available": "Esta semana"
+    },
+    {
+      "id": "albahaca",
+      "producerId": "p5",
+      "name": "Albahaca fresca",
+      "category": "Aromáticas",
+      "price": 900,
+      "unit": "atado",
+      "stock": 15,
+      "active": true,
+      "photo": "market_greens",
+      "lot": "HL-2652",
+      "featured": false,
+      "organic": true,
+      "short": "Albahaca de hoja ancha, cortada a mano y con tallo largo.",
+      "description": "Albahaca de hoja ancha, cultivada entre las hortalizas para repeler insectos. Se corta a mano y se entrega con el tallo en agua. Conservar en la heladera.",
+      "highlights": [
+        "Hoja ancha",
+        "Corte manual",
+        "Sin pesticidas"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Primavera",
+      "available": "Esta semana"
+    },
+    {
+      "id": "camino",
+      "producerId": "p6",
+      "name": "Camino de mesa de algodón",
+      "category": "Artesanías",
+      "price": 18000,
+      "unit": "1 u",
+      "stock": 5,
+      "active": true,
+      "photo": "textil",
+      "lot": "MA-2660",
+      "featured": true,
+      "organic": false,
+      "short": "Tejido a telar por artesanas de Pirané, con tintes naturales.",
+      "description": "Camino de mesa tejido a telar con algodón nativo y tintes de corteza. Cada pieza es única y lleva una etiqueta con el nombre de la artesana que la hizo. Medidas aproximadas: 35 × 120 cm.",
+      "highlights": [
+        "Tejido a telar",
+        "Tintes naturales",
+        "Pieza única"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Todo el año",
+      "available": "5 piezas"
+    },
+    {
+      "id": "canasta",
+      "producerId": "p6",
+      "name": "Canasta de algodón",
+      "category": "Artesanías",
+      "price": 22000,
+      "unit": "1 u",
+      "stock": 3,
+      "active": true,
+      "photo": "textil",
+      "lot": "MA-2661",
+      "featured": false,
+      "organic": false,
+      "short": "Canasta tejida a mano para pan o frutas. Asa reforzada.",
+      "description": "Canasta tejida a mano con algodón nativo, asa reforzada y base firme. Sirve para pan, frutas o para guardar lanas. Lavar a mano con agua fría.",
+      "highlights": [
+        "Tejida a mano",
+        "Asa reforzada",
+        "Algodón nativo"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Todo el año",
+      "available": "3 piezas"
+    },
+    {
+      "id": "algodon_nativo",
+      "producerId": "p6",
+      "name": "Algodón nativo en rama",
+      "category": "Artesanías",
+      "price": 4500,
+      "unit": "100 g",
+      "stock": 10,
+      "active": true,
+      "photo": "algodon",
+      "lot": "MA-2662",
+      "featured": false,
+      "organic": true,
+      "short": "Fibra de algodón nativo, limpia y cardada a mano.",
+      "description": "Fibra de algodón nativo cultivada en Pirané, limpia y cardada a mano. Se usa para relleno de almohadas, muñecos o para hilar. Bolsa de 100 g.",
+      "highlights": [
+        "Cardado a mano",
+        "Sin blanquear",
+        "100 g"
+      ],
+      "harvest": "Agosto 2026",
+      "season": "Otoño",
+      "available": "Esta semana"
+    },
+    {
+      "id": "mango",
+      "producerId": "p7",
+      "name": "Mango palmer",
+      "category": "Frutas",
+      "price": 2600,
+      "unit": "kg",
+      "stock": 16,
+      "active": true,
+      "photo": "mango",
+      "lot": "FB-2670",
+      "featured": true,
+      "organic": false,
+      "short": "Mango de pulpa firme y dulce, cortado a pedido en Villa Dos Trece.",
+      "description": "Mango palmer de pulpa firme, dulce y con poca fibra. Se corta a pedido y se entrega en cajones reutilizados. Ideal para comer fresco, en ensaladas o para jugo.",
+      "highlights": [
+        "Corte a pedido",
+        "Pulpa firme",
+        "Villa Dos Trece"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Primavera",
+      "available": "Esta semana"
+    },
+    {
+      "id": "banana",
+      "producerId": "p7",
+      "name": "Banana de monte",
+      "category": "Frutas",
+      "price": 1900,
+      "unit": "kg",
+      "stock": 22,
+      "active": true,
+      "photo": "banana",
+      "lot": "FB-2671",
+      "featured": false,
+      "organic": false,
+      "short": "Banana de racimo, madurada al sol y sin cámara de gas.",
+      "description": "Banana de racimo cultivada entre los árboles de mango. Madura al sol, sin cámara de gas. Se entrega en el punto justo para consumir durante la semana.",
+      "highlights": [
+        "Maduración natural",
+        "Sin cámara de gas",
+        "Racimo fresco"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Todo el año",
+      "available": "Esta semana"
+    },
+    {
+      "id": "surubi",
+      "producerId": "p8",
+      "name": "Surubí fresco",
+      "category": "Pesca",
+      "price": 9800,
+      "unit": "kg",
+      "stock": 7,
+      "active": true,
+      "photo": "pescado",
+      "lot": "SR-2680",
+      "featured": true,
+      "organic": false,
+      "short": "Filete de surubí del río Paraguay, en hielo desde la madrugada.",
+      "description": "Filete de surubí pescado en el río Paraguay y conservado en hielo desde la madrugada. Se entrega limpio, sin espinas. Ideal para grill, horno o guiso.",
+      "highlights": [
+        "Pesca artesanal",
+        "Filete limpio",
+        "Cadena de frío"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Todo el año",
+      "available": "Esta semana"
+    },
+    {
+      "id": "pacu",
+      "producerId": "p8",
+      "name": "Pacú ahumado",
+      "category": "Pesca",
+      "price": 14500,
+      "unit": "kg",
+      "stock": 4,
+      "active": true,
+      "photo": "pescado_grill",
+      "lot": "SR-2681",
+      "featured": false,
+      "organic": false,
+      "short": "Pacú ahumado con leña de quebracho blanco, listo para picar.",
+      "description": "Pacú ahumado lentamente con leña de quebracho blanco. Sabor intenso y textura firme. Se entrega en pieza entera o en trozos, al vacío. Mantener refrigerado.",
+      "highlights": [
+        "Ahumado con quebracho",
+        "Al vacío",
+        "Pieza entera"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Todo el año",
+      "available": "Últimos kilos"
+    },
+    {
+      "id": "microgreens",
+      "producerId": "p9",
+      "name": "Bandeja de microgreens",
+      "category": "Aromáticas",
+      "price": 3800,
+      "unit": "100 g",
+      "stock": 9,
+      "active": true,
+      "photo": "hojas",
+      "lot": "VV-2690",
+      "featured": false,
+      "organic": true,
+      "short": "Mezcla de rabanito, girasol y arveja. Corte del día.",
+      "description": "Mezcla de microgreens de rabanito, girasol y arveja, cultivada en bandeja y cortada el mismo día de la entrega. Se conserva una semana en la heladera.",
+      "highlights": [
+        "Corte del día",
+        "Mezcla de tres",
+        "Cultivo urbano"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Todo el año",
+      "available": "Esta semana"
+    },
+    {
+      "id": "oregano",
+      "producerId": "p9",
+      "name": "Orégano fresco",
+      "category": "Aromáticas",
+      "price": 1000,
+      "unit": "atado",
+      "stock": 0,
+      "active": true,
+      "photo": "market_greens",
+      "lot": "VV-2691",
+      "featured": false,
+      "organic": true,
+      "short": "Orégano de huerta urbana, con aroma fuerte. Vuelve el viernes.",
+      "description": "Orégano fresco de huerta urbana, de hoja pequeña y aroma fuerte. Se corta a pedido. Esta semana no hay disponibilidad; vuelve el viernes.",
+      "highlights": [
+        "Huerta urbana",
+        "Aroma fuerte",
+        "Corte a pedido"
+      ],
+      "harvest": "Octubre 2026",
+      "season": "Primavera",
+      "available": "Vuelve el viernes"
+    }
+  ]
+}

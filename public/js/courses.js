@@ -1,0 +1,243 @@
+/* Cápsulas de formación · contenido estático de la app */
+const COURSES = [
+  {
+    "id": "oratoria",
+    "title": "Decir lo que hacés, sin vueltas",
+    "category": "Oratoria",
+    "duration": "28 min",
+    "photo": "farmer",
+    "level": "Inicial",
+    "lessons": 3,
+    "summary": "Un método de 60 segundos para presentar tu finca, tu producto y tu precio sin sonar a aviso.",
+    "lessonsData": [
+      {
+        "id": "or1",
+        "title": "El gancho de 15 segundos",
+        "dur": "8 min",
+        "summary": "Empezá por el problema o el deseo, no por tu currículum.",
+        "body": [
+          "Cuando alguien te pregunta «¿qué vendés?», la respuesta habitual es una lista de productos. El problema es que el otro todavía no sabe por qué debería escucharte. Un buen gancho nombra una situación concreta: «¿Sabés lo que es un pomelo que se corta y larga jugo hasta el codo?».",
+          "Después del gancho, recién ahí, decí qué hacés y dónde. El orden importa: primero el deseo, después el dato."
+        ],
+        "bullets": [
+          "Una sola idea por frase.",
+          "Nada de adjetivos vacíos: «rico», «natural», «artesanal» no alcanzan solos.",
+          "Cerrá el gancho con una pregunta o una imagen concreta."
+        ],
+        "exercise": "Grabate diciendo en 15 segundos qué producto tenés y por qué alguien lo querría. Escuchalo una vez. Si no se entiende, acortalo."
+      },
+      {
+        "id": "or2",
+        "title": "El cuerpo también vende",
+        "dur": "10 min",
+        "summary": "Postura, mirada y manos: lo que la cámara muestra antes de que hables.",
+        "body": [
+          "La cámara no necesita que actúes: necesita que estés cómodo. Apoyá los pies en el piso, bajá los hombros y mirá a la lente como si fuera una persona conocida. Si mirás la pantalla, en el video parecerá que mirás para otro lado.",
+          "Las manos ayudan a mostrar tamaño, textura y proceso. No las escondas. Si estás nervioso, sostené el producto: te da un lugar para las manos y una excusa para mirar hacia abajo sin perder el hilo."
+        ],
+        "bullets": [
+          "Grabá a la altura de los ojos.",
+          "Luz de frente, nunca de espaldas a la ventana.",
+          "Hablá un poco más lento de lo que te parece natural."
+        ],
+        "exercise": "Grabá 30 segundos presentando un producto. Mirá la cámara, mostralo con las manos y no leas. Repetí una vez."
+      },
+      {
+        "id": "or3",
+        "title": "Responder sin ponerse defensivo",
+        "dur": "10 min",
+        "summary": "Qué decir cuando preguntan el precio, si hay stock o por qué es más caro.",
+        "body": [
+          "«Es caro» no siempre es una objeción de precio: a veces es una forma de pedir más información. Respondé con el proceso, no con la defensa. «Sí, es más caro que el del supermercado. Se corta a mano, sale hoy y no lleva cera. Si querés, probá un kilo y me contás».",
+          "Si no hay stock, decilo rápido y ofrecé la fecha. La honestidad vende más que la disponibilidad inventada. Anotá el pedido y avisá cuando vuelva."
+        ],
+        "bullets": [
+          "No discutas el precio: explicá qué incluye.",
+          "Si no hay, ofrecé fecha o alternativa.",
+          "Terminá siempre con una acción concreta."
+        ],
+        "exercise": "Escribí tres respuestas para «es caro», «¿me hacés precio?» y «¿tenés stock?». Decilas en voz alta sin justificarte."
+      }
+    ]
+  },
+  {
+    "id": "storytelling",
+    "title": "La historia de tu chacra en 3 escenas",
+    "category": "Storytelling",
+    "duration": "24 min",
+    "photo": "beekeeper",
+    "level": "Inicial",
+    "lessons": 3,
+    "summary": "Siembra, cosecha y mesa: una estructura simple para contar el detrás de escena.",
+    "lessonsData": [
+      {
+        "id": "st1",
+        "title": "La escena que nadie ve",
+        "dur": "8 min",
+        "summary": "El valor no está en el producto terminado, sino en el trabajo que lo hace posible.",
+        "body": [
+          "Un video de una mesa llena de fruta no cuenta nada. En cambio, las manos que levantan una mandioca a las seis de la mañana sí. El detrás de escena es la prueba de que el producto existe y de que alguien se ocupó de él.",
+          "Elegí una escena concreta: la primera luz, el barro en las botas, el cajón que se reutiliza. No necesitás mostrar toda la finca. Necesitás mostrar una prueba."
+        ],
+        "bullets": [
+          "Una escena, un plano, una idea.",
+          "Mostrá manos y herramientas antes que paisajes.",
+          "El sonido del lugar vale más que una música genérica."
+        ],
+        "exercise": "Hacé una lista de cinco momentos de tu semana que un cliente nunca vería. Elegí el más concreto y describilo en tres frases."
+      },
+      {
+        "id": "st2",
+        "title": "Del problema al plato",
+        "dur": "8 min",
+        "summary": "Armá un relato de tres tiempos: antes, durante y después.",
+        "body": [
+          "Antes: qué problema había (la fruta que se perdía, el intermediario, la falta de agua). Durante: qué hiciste para resolverlo. Después: qué recibe el cliente hoy. Esa estructura se entiende sin explicaciones y se recuerda.",
+          "No hace falta exagerar. Un relato verdadero con un detalle pequeño —el nombre de la hija que ayuda, el camino de tierra, el olor del galpón— vale más que una historia grandiosa."
+        ],
+        "bullets": [
+          "Antes / durante / después.",
+          "Un detalle sensorial por escena.",
+          "Cerrá con lo que el cliente puede hacer hoy."
+        ],
+        "exercise": "Escribí tu historia en tres párrafos de dos frases. Leela en voz alta y sacá todo lo que no sea necesario."
+      },
+      {
+        "id": "st3",
+        "title": "El sello de origen",
+        "dur": "8 min",
+        "summary": "Cómo contar de dónde viene sin convertir el origen en un adorno.",
+        "body": [
+          "El origen no es un logo: es una coordenada. Decir «de Herradura» es más fuerte que decir «del campo». Si podés, mostrá el camino, el río o la escuela del pueblo. La gente confía en lo que puede ubicar.",
+          "En tu perfil de InnovaAgro, el sello de origen reúne el lugar, la práctica y la temporada. Usalo como prueba, no como decoración: cada vez que digas «de Formosa», mostrá algo que solo pasa ahí."
+        ],
+        "bullets": [
+          "Nombres reales, no genéricos.",
+          "Una práctica concreta por publicación.",
+          "La temporada como argumento, no como excusa."
+        ],
+        "exercise": "Revisá tu perfil: ¿se entiende en 10 segundos quién sos, dónde producís y qué te hace distinto? Corregí una sola cosa."
+      }
+    ]
+  },
+  {
+    "id": "redes",
+    "title": "Reels que traen pedidos",
+    "category": "Redes",
+    "duration": "32 min",
+    "photo": "vendor",
+    "level": "Intermedio",
+    "lessons": 3,
+    "summary": "Video vertical, tres planos y una llamada a la acción que lleva a WhatsApp.",
+    "lessonsData": [
+      {
+        "id": "rd1",
+        "title": "El video vertical, sin vergüenza",
+        "dur": "10 min",
+        "summary": "Un formato simple que se graba con el celular que ya tenés.",
+        "body": [
+          "Grabá vertical, con el celular apoyado o sostenido a la altura del pecho. La luz tiene que venir de frente. No hace falta trípode: una caja o un banco sirven. El primer segundo tiene que mostrar el producto o una acción, no un logo.",
+          "Los videos más efectivos son cortos y específicos: cómo se corta un pomelo, cómo se envasa la miel, qué pasa cuando abrís la canasta. Mostrá el proceso, no lo expliques todo."
+        ],
+        "bullets": [
+          "Vertical 9:16.",
+          "Primer segundo con producto o acción.",
+          "Subtítulos siempre: mucha gente mira sin sonido."
+        ],
+        "exercise": "Grabá tres planos de 5 segundos: producto, manos, resultado. Unilos sin música y mirá si se entiende."
+      },
+      {
+        "id": "rd2",
+        "title": "La receta de tres pasos",
+        "dur": "11 min",
+        "summary": "Un formato repetible para no quedarte sin ideas.",
+        "body": [
+          "Elegí un producto y mostrá tres pasos: cómo se elige, cómo se prepara, cómo se sirve. Por ejemplo: mandioca → hervir → chipa. La receta no tiene que ser gourmet; tiene que ser útil.",
+          "Al final, decí dónde se consigue y qué tiene de distinto. Un reel sin llamada a la acción es un video lindo, no una venta."
+        ],
+        "bullets": [
+          "Producto + tres pasos + dónde conseguirlo.",
+          "Texto en pantalla con la receta.",
+          "Respondé los comentarios con un audio o un video corto."
+        ],
+        "exercise": "Elegí tu producto más vendido y escribí los tres pasos. Grabalos en un solo plano continuous si podés."
+      },
+      {
+        "id": "rd3",
+        "title": "Del like al pedido",
+        "dur": "11 min",
+        "summary": "Cómo usar WhatsApp Business y el catálogo para cerrar la venta.",
+        "body": [
+          "Instagram y TikTok sirven para que te descubran; WhatsApp sirve para cerrar. Poné el link en la biografía y en cada historia. Configurá un mensaje de bienvenida con horarios, formas de pago y zona de entrega.",
+          "En WhatsApp Business podés cargar un catálogo con fotos, precios y stock. Cuando alguien pregunte «¿cuánto sale?», mandale la ficha del producto en vez de escribir todo de nuevo."
+        ],
+        "bullets": [
+          "Un solo link de destino: tu perfil o tu WhatsApp.",
+          "Mensaje de bienvenida con horarios y zona.",
+          "Catálogo actualizado cada semana."
+        ],
+        "exercise": "Configurá tu mensaje de bienvenida con tres datos: qué vendés, dónde entregás y hasta cuándo podés tomar pedidos."
+      }
+    ]
+  },
+  {
+    "id": "conservacion",
+    "title": "Que la cosecha dure más",
+    "category": "Conservación",
+    "duration": "20 min",
+    "photo": "hojas",
+    "level": "Inicial",
+    "lessons": 3,
+    "summary": "Frío, humedad y envases: lo básico para que el producto llegue como salió.",
+    "lessonsData": [
+      {
+        "id": "cv1",
+        "title": "La cadena de frío, sin misterio",
+        "dur": "7 min",
+        "summary": "Qué se enfría, cuándo y por qué no todo va a la heladera.",
+        "body": [
+          "No todos los productos se conservan igual. La carne y el pescado necesitan frío inmediato; la mandioca y la batata, un lugar seco y ventilado; la miel, temperatura estable y ningún frío extremo. Guardar todo junto acelera la pérdida.",
+          "La regla práctica: separá por temperatura y por humedad. Si el producto transpira, necesita aire. Si es carne o pescado, necesita hielo y una cadena sin cortes."
+        ],
+        "bullets": [
+          "Pescado y carne: hielo desde el primer minuto.",
+          "Raíces: seco, oscuro y ventilado.",
+          "Miel y quesos: temperatura estable, sin sol directo."
+        ],
+        "exercise": "Revisá dónde guardás cada producto hoy. Anotá cuáles comparten espacio y cuáles deberían estar separados."
+      },
+      {
+        "id": "cv2",
+        "title": "Hojas que llegan firmes",
+        "dur": "7 min",
+        "summary": "El lavado, el secado y el envase que cambian el resultado.",
+        "body": [
+          "La lechuga y las aromáticas se cortan temprano, se enfrían rápido y se guardan sin lavar. El agua en la hoja acelera la descomposición. Si hay que lavar, secá bien con un paño limpio o una centrífuga.",
+          "Para el viaje, usá cajas rígidas y papel perforado. No apiles más de lo que el cajón soporta: el peso rompe las hojas de abajo y aparece el color marrón."
+        ],
+        "bullets": [
+          "Cortar temprano.",
+          "No lavar antes de guardar.",
+          "Caja rígida, sin apilar de más."
+        ],
+        "exercise": "Armá una caja de prueba con papel perforado y otra sin papel. Compará a las 24 horas."
+      },
+      {
+        "id": "cv3",
+        "title": "Envases que cuentan el origen",
+        "dur": "6 min",
+        "summary": "Un envase limpio y rotulado es parte del producto.",
+        "body": [
+          "El envase no necesita ser caro: necesita ser limpio, cerrado y legible. Una etiqueta con el nombre del productor, el lugar, la fecha de envasado y el peso resuelve la mitad de las preguntas.",
+          "Si usás frascos reutilizados, esterilizalos y cambiá la tapa si está oxidada. La miel y el dulce no se contaminan solos: lo hace una tapa sucia."
+        ],
+        "bullets": [
+          "Nombre, lugar, fecha y peso.",
+          "Tapa limpia y bien cerrada.",
+          "Evitá el plástico que no se puede reutilizar."
+        ],
+        "exercise": "Diseñá una etiqueta de 6 × 4 cm con cuatro datos. Imprimila en papel común y pegala en un frasco de prueba."
+      }
+    ]
+  }
+];

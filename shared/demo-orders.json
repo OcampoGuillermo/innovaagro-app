@@ -1,0 +1,211 @@
+[
+  {
+    "code": "IA-261018-1042",
+    "daysAgo": 2,
+    "statuses": {
+      "p1": "entregado",
+      "p3": "entregado"
+    },
+    "buyer": {
+      "name": "Mariana Silva",
+      "phone": "",
+      "city": "Formosa Capital",
+      "address": ""
+    },
+    "items": [
+      [
+        "pomelo",
+        2
+      ],
+      [
+        "miel",
+        1
+      ]
+    ],
+    "delivery": {
+      "mode": "pickup",
+      "pointId": "pt2",
+      "routeId": "r1"
+    },
+    "payment": "Transferencia",
+    "note": "Retiro el jueves a la tarde."
+  },
+  {
+    "code": "IA-261019-1107",
+    "daysAgo": 1,
+    "statuses": {
+      "p2": "preparando",
+      "p5": "nuevo"
+    },
+    "buyer": {
+      "name": "Julián Benítez",
+      "phone": "",
+      "city": "Formosa Capital",
+      "address": "Barrio San Pedro, casa 14"
+    },
+    "items": [
+      [
+        "mandioca",
+        3
+      ],
+      [
+        "lechuga",
+        2
+      ],
+      [
+        "tomate",
+        1
+      ]
+    ],
+    "delivery": {
+      "mode": "delivery",
+      "routeId": "r1",
+      "address": "Barrio San Pedro, casa 14"
+    },
+    "payment": "Efectivo",
+    "note": "Tocar timbre, hay perro."
+  },
+  {
+    "code": "IA-261020-1132",
+    "daysAgo": 0,
+    "statuses": {
+      "p4": "nuevo"
+    },
+    "buyer": {
+      "name": "Cooperativa El Sol",
+      "phone": "",
+      "city": "Clorinda",
+      "address": ""
+    },
+    "items": [
+      [
+        "queso_cabra",
+        2
+      ],
+      [
+        "dulce",
+        1
+      ]
+    ],
+    "delivery": {
+      "mode": "pickup",
+      "pointId": "pt6",
+      "routeId": "r3"
+    },
+    "payment": "Mercado Pago",
+    "note": "Facturar a nombre de la cooperativa."
+  },
+  {
+    "code": "IA-261016-0931",
+    "daysAgo": 4,
+    "statuses": {
+      "p7": "entregado"
+    },
+    "buyer": {
+      "name": "Rocío Ayala",
+      "phone": "",
+      "city": "Villa Dos Trece",
+      "address": "Calle 12, casa 8"
+    },
+    "items": [
+      [
+        "mango",
+        2
+      ],
+      [
+        "banana",
+        1
+      ]
+    ],
+    "delivery": {
+      "mode": "delivery",
+      "routeId": "r1",
+      "address": "Calle 12, casa 8"
+    },
+    "payment": "Transferencia",
+    "note": ""
+  },
+  {
+    "code": "IA-261015-0818",
+    "daysAgo": 5,
+    "statuses": {
+      "p1": "entregado",
+      "p3": "entregado"
+    },
+    "buyer": {
+      "name": "Pedro Godoy",
+      "phone": "",
+      "city": "Formosa Capital",
+      "address": ""
+    },
+    "items": [
+      [
+        "naranja",
+        3
+      ],
+      [
+        "miel_monte",
+        1
+      ]
+    ],
+    "delivery": {
+      "mode": "pickup",
+      "pointId": "pt1",
+      "routeId": "r1"
+    },
+    "payment": "Efectivo",
+    "note": ""
+  },
+  {
+    "code": "IA-261013-0744",
+    "daysAgo": 7,
+    "statuses": {
+      "p8": "entregado"
+    },
+    "buyer": {
+      "name": "Restaurante La Ribera",
+      "phone": "",
+      "city": "Formosa Capital",
+      "address": ""
+    },
+    "items": [
+      [
+        "surubi",
+        2
+      ]
+    ],
+    "delivery": {
+      "mode": "pickup",
+      "pointId": "pt1",
+      "routeId": "r1"
+    },
+    "payment": "Transferencia",
+    "note": "Pedido para el servicio de la noche."
+  },
+  {
+    "code": "IA-261012-0650",
+    "daysAgo": 8,
+    "statuses": {
+      "p6": "cancelado"
+    },
+    "buyer": {
+      "name": "Lucía Fernández",
+      "phone": "",
+      "city": "Pirané",
+      "address": ""
+    },
+    "items": [
+      [
+        "camino",
+        1
+      ]
+    ],
+    "delivery": {
+      "mode": "pickup",
+      "pointId": "pt5",
+      "routeId": "r2"
+    },
+    "payment": "Mercado Pago",
+    "note": "Se canceló por falta de stock."
+  }
+]

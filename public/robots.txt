@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /uploads/
+
+# La app usa rutas con hash (#/...), que los buscadores tratan como una sola página.
